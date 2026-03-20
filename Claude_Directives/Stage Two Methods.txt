@@ -1,0 +1,495 @@
+FORECAST ENGINE — C# (READ / MODIFY ALLOWED)
+  public ForecastContext ProcessDrawingDate(int targetDrawIndex)
+  {
+      return new ForecastContext(targetDrawIndex, _lookbackN);
+  }
+  
+  public sealed class ForecastContext
+{
+    public int TargetDrawIndex { get; }
+    public int LowerBoundDrawIndex { get; }
+    public int UpperBoundDrawIndex { get; }
+    public int LookbackN { get; }
+    public List<lottoVal> AllHistory { get; set; }
+    public ForecastContext(int targetDrawIndex, int lookbackN)
+    {
+        TargetDrawIndex = targetDrawIndex;
+        LookbackN = lookbackN;
+
+        UpperBoundDrawIndex = targetDrawIndex - 1;
+        LowerBoundDrawIndex = Math.Max(1, targetDrawIndex - lookbackN);
+    }
+}
+
+Core forecast math (this defines the model)
+
+   public double ComputeMovingCenter( ForecastContext ctx,int setNumber)
+   {
+       if (ctx.AllHistory == null || ctx.AllHistory.Count == 0)
+           throw new InvalidOperationException("AllHistory is not initialized");
+
+       var window = ctx.AllHistory
+           .Where(x =>
+               x.DrawIndex >= ctx.LowerBoundDrawIndex &&
+               x.DrawIndex <= ctx.UpperBoundDrawIndex)
+           .ToList();
+
+       if (window.Count == 0)
+           throw new InvalidOperationException("Empty sliding window");
+
+       var values = window
+           .Select(v => LottoHelper.GetValueFromSet(v, setNumber))
+           .ToList();
+
+       return values.Average();
+   }
+
+   public int ComputeSafeDelta( ForecastContext ctx, int setNumber, double percentile = 0.90)
+   {
+       if (ctx.AllHistory == null || ctx.AllHistory.Count == 0)
+           throw new InvalidOperationException("AllHistory is not initialized");
+
+       var window = ctx.AllHistory
+           .Where(x =>
+               x.DrawIndex >= ctx.LowerBoundDrawIndex &&
+               x.DrawIndex <= ctx.UpperBoundDrawIndex)
+           .ToList();
+
+       if (window.Count == 0)
+           throw new InvalidOperationException("Empty sliding window");
+
+       double center = ComputeMovingCenter(ctx, setNumber);
+
+       var deviations = window
+           .Select(v => Math.Abs(
+               LottoHelper.GetValueFromSet(v, setNumber) - center))
+           .OrderBy(d => d)
+           .ToList();
+
+       int idx = (int)Math.Floor(percentile * (deviations.Count - 1));
+       return (int)Math.Ceiling(deviations[idx]);
+   }
+
+
+
+   public int ComputeHotDelta( ForecastContext ctx, int setNumber, double percentile = 0.65)
+   {
+       if (ctx.AllHistory == null || ctx.AllHistory.Count == 0)
+           throw new InvalidOperationException("AllHistory is not initialized");
+
+       var window = ctx.AllHistory
+           .Where(x =>
+               x.DrawIndex >= ctx.LowerBoundDrawIndex &&
+               x.DrawIndex <= ctx.UpperBoundDrawIndex)
+           .ToList();
+
+       if (window.Count == 0)
+           throw new InvalidOperationException("Empty sliding window");
+
+       double center = ComputeMovingCenter(ctx, setNumber);
+
+       var deviations = window
+           .Select(v => Math.Abs(
+               LottoHelper.GetValueFromSet(v, setNumber) - center))
+           .OrderBy(d => d)
+           .ToList();
+
+       int idx = (int)Math.Floor(percentile * (deviations.Count - 1));
+       return (int)Math.Ceiling(deviations[idx]);
+   }
+
+   public (int min, int max) ComputeWindowMinMax( ForecastContext ctx, int setNbr)
+   {
+       var values = ctx.AllHistory
+           .Where(x =>
+               x.DrawIndex >= ctx.LowerBoundDrawIndex &&
+               x.DrawIndex <= ctx.UpperBoundDrawIndex)
+           .Select(x => LottoHelper.GetValueFromSet(x, setNbr))
+           .ToList();
+
+       if (values.Count == 0)
+           throw new InvalidOperationException("Empty window");
+
+       return (values.Min(), values.Max());
+   }
+   
+ 
+ From DAL / lottoDal:
+ 
+ public void PersistForecastBands(string LottoType, DateTime forecastDate, string modelVersion,
+int[] safeMin,    int[] safeMax,    int?[] hotMin,    int?[] hotMax)
+{
+    // Build TVP
+    DataTable bands = new DataTable();
+    bands.Columns.Add("SetNumber", typeof(int));
+    bands.Columns.Add("SafeLow", typeof(int));
+    bands.Columns.Add("SafeHigh", typeof(int));
+    bands.Columns.Add("HotLow", typeof(int));
+    bands.Columns.Add("HotHigh", typeof(int));
+    for (int setNumber = 1; setNumber <= 6; setNumber++)
+    {
+        object hotLowValue = hotMin[setNumber].HasValue
+            ? (object)hotMin[setNumber].Value
+            : DBNull.Value;
+
+        object hotHighValue = hotMax[setNumber].HasValue
+            ? (object)hotMax[setNumber].Value
+            : DBNull.Value;
+
+        bands.Rows.Add(
+            setNumber,
+            safeMin[setNumber],
+            safeMax[setNumber],
+            hotLowValue,
+            hotHighValue
+        );
+    }
+    // ---------- Build parameters ----------
+    List<SqlParameter> parms = new List<SqlParameter>();
+
+    parms.Add(new SqlParameter("@LottoType", LottoType));
+    parms.Add(new SqlParameter("@DrawDate", forecastDate));
+    parms.Add(new SqlParameter("@ModelVersion", modelVersion));
+
+    SqlParameter tvp = new SqlParameter("@Bands", SqlDbType.Structured);
+    tvp.TypeName = "dbo.ForecastBandSet";
+    tvp.Value = bands;
+
+    parms.Add(tvp);
+
+    _db.runSP("dbo.sp_PersistForecastBands", parms.ToArray());
+}
+
+USE [travel4less]
+GO
+/****** Object:  StoredProcedure [dbo].[sp_PersistForecastBands]    Script Date: 2/20/2026 8:42:12 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[sp_PersistForecastBands]
+(
+    @LottoType    CHAR(2),
+    @DrawDate     DATE,
+    @ModelVersion VARCHAR(50),
+    @Bands        dbo.ForecastBandSet READONLY
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO ForecastPredictions
+    (
+        LottoType,
+        DrawDate,
+        SetNumber,
+        SafeLow,
+        SafeHigh,
+        HotLow,
+        HotHigh,
+        ModelVersion,
+        CreatedAt
+    )
+    SELECT
+        @LottoType,
+        @DrawDate,
+        b.SetNumber,
+        b.SafeLow,
+        b.SafeHigh,
+        b.HotLow,
+        b.HotHigh,
+        @ModelVersion,
+        GETDATE()
+    FROM @Bands b
+    WHERE NOT EXISTS
+    (
+        SELECT 1
+        FROM ForecastPredictions f
+        WHERE f.LottoType   = @LottoType
+          AND f.DrawDate    = @DrawDate
+          AND f.SetNumber   = b.SetNumber
+          AND f.ModelVersion = @ModelVersion
+    );
+END;
+
+
+4️⃣ Lifecycle / orchestration (ONE of these, not all)
+
+       public void BackfillPredictions( string state, int daysBack, string modelVersion, trace tracer
+)
+       {
+           const int LOOKBACK_DRAWS = 44;
+
+           List<DateTime> drawDates = GetDrawDates(state, daysBack)
+               .OrderBy(d => d)
+               .ToList();
+
+           int total = drawDates.Count;
+           int i = 0;
+
+           List<lottoVal> allHistory;
+           using (lottoDal ld = new lottoDal())
+           {
+               allHistory = ld.LoadAllHistoryOnce(state);
+           }
+
+           using (lottoDal lda = new lottoDal())
+           {
+               foreach (DateTime forecastDate in drawDates)
+               {
+                   i++;
+
+                   tracer?.Invoke(
+                       $"Backfill {state} {i}/{total} : {forecastDate:yyyy-MM-dd}");
+
+                   int asOfDrawIndex = lda.getDrawIndexBefore(state, forecastDate);
+                   if (asOfDrawIndex <= 0)
+                       continue;
+
+                   ForecastEngine engine = new ForecastEngine(LOOKBACK_DRAWS);
+                   ForecastContext ctx = engine.ProcessDrawingDate(asOfDrawIndex);
+                   ctx.AllHistory = allHistory;
+
+                   int[] safeMin = new int[7];
+                   int[] safeMax = new int[7];
+                   int?[] hotMin = new int?[7];
+                   int?[] hotMax = new int?[7];
+
+                   for (int setNumber = 1; setNumber <= 6; setNumber++)
+                   {
+                       double center = engine.ComputeMovingCenter(ctx, setNumber);
+
+                       int safeDelta = engine.ComputeSafeDelta(ctx, setNumber);
+                       int hotDelta = engine.ComputeHotDelta(ctx, setNumber);
+
+                       int sLow = (int)Math.Round(center - safeDelta);
+                       int sHigh = (int)Math.Round(center + safeDelta);
+                       int hLow = (int)Math.Round(center - hotDelta);
+                       int hHigh = (int)Math.Round(center + hotDelta);
+
+                       var (minLegal, maxLegal) = engine.ComputeWindowMinMax(ctx, setNumber);
+
+                       sLow = Math.Max(sLow, minLegal);
+                       sHigh = Math.Min(sHigh, maxLegal);
+                       hLow = Math.Max(hLow, minLegal);
+                       hHigh = Math.Min(hHigh, maxLegal);
+
+                       if (sLow > sHigh) sLow = sHigh;
+                       if (hLow > hHigh) hLow = hHigh;
+
+                       safeMin[setNumber] = sLow;
+                       safeMax[setNumber] = sHigh;
+                       hotMin[setNumber] = hLow;
+                       hotMax[setNumber] = hHigh;
+                   }
+
+                   lda.PersistForecastBands(
+                       state,
+                       forecastDate,
+                       modelVersion,
+                       safeMin,
+                       safeMax,
+                       hotMin,
+                       hotMax
+                   );
+               }
+           }
+
+           tracer?.Invoke("Backfill complete");
+       }
+	   
+	   
+	   private bool EnsureForecastCorridorsUpToDate()
+{
+    const int LOOKBACK_DRAWS = 44;
+    const string MODEL_VERSION = "WF_v4_baseline";
+
+    string state = StateCode;
+
+    // 1) Get the latest draw date only
+    DateTime latestDrawDate;
+    using (lottoDal lda = new lottoDal())
+    {
+        latestDrawDate = lda.GetLastDrawingDate(state);
+    }
+
+    if (latestDrawDate == DateTime.MinValue)
+        return true;
+
+    // 2) Resolve draw index
+    int drawIndex;
+    using (lottoDal lda = new lottoDal())
+    {
+        drawIndex = lda.getDrawIndex(latestDrawDate, state);
+    }
+
+    if (drawIndex <= 0)
+        return true;
+
+    // 3) Skip if already forecasted
+    using (lottoDal lda = new lottoDal())
+    {
+        if (lda.ForecastExists(state, latestDrawDate, MODEL_VERSION))
+            return true;
+    }
+
+    // 4) Forecast engine + history
+    ForecastEngine engine = new ForecastEngine(LOOKBACK_DRAWS);
+
+    if (_allHistory == null)
+    {
+        using (lottoDal ld = new lottoDal())
+        {
+            _allHistory = ld.LoadAllHistoryOnce(state);
+        }
+    }
+
+    ForecastContext ctx = engine.ProcessDrawingDate(drawIndex);
+    ctx.AllHistory = _allHistory;
+
+    // arrays indexed 1..6
+    int[] safeMin = new int[7];
+    int[] safeMax = new int[7];
+    int?[] hotMin = new int?[7];
+    int?[] hotMax = new int?[7];
+
+    for (int setNumber = 1; setNumber <= 6; setNumber++)
+    {
+        double center = engine.ComputeMovingCenter(ctx, setNumber);
+        int safeDelta = engine.ComputeSafeDelta(ctx, setNumber);
+        int hotDelta = engine.ComputeHotDelta(ctx, setNumber);
+
+        int sLow = (int)Math.Round(center - safeDelta);
+        int sHigh = (int)Math.Round(center + safeDelta);
+        int hLow = (int)Math.Round(center - hotDelta);
+        int hHigh = (int)Math.Round(center + hotDelta);
+
+        int[] limits = LotteryConfig.getSetLimits(setNumber, state);
+        int minLegal = limits[0];
+        int maxLegal = limits[1];
+
+        safeMin[setNumber] = Math.Max(sLow, minLegal);
+        safeMax[setNumber] = Math.Min(sHigh, maxLegal);
+
+        hotMin[setNumber] = Math.Max(hLow, minLegal);
+        hotMax[setNumber] = Math.Min(hHigh, maxLegal);
+    }
+
+    // 5) Persist ONE new forecast date
+    using (lottoDal lda = new lottoDal())
+    {
+        lda.PersistForecastBands(
+            state,
+            latestDrawDate,
+            MODEL_VERSION,
+            safeMin,
+            safeMax,
+            hotMin,
+            hotMax
+        );
+    }
+
+    return true;
+}
+
+VIEWER FREEZE — READ ONLY
+
+The following viewer code is production-stable and MUST NOT be refactored,
+renamed, reordered, optimized, or logically altered in any way.
+
+
+
+ S.poly._sortedDraws = sortedDraws;
+  S.poly._past_ms    = new Date(S.cutoffPast + "T00:00:00").getTime();
+  S.poly._xEnd_ms    = S.poly._xEnd.getTime();
+
+
+function xOfDate(dateStr) {
+  const past   = new Date(S.cutoffPast   + "T00:00:00");
+  const xEnd   = S.poly._xEnd || new Date(S.anchor + "T00:00:00");
+  const d      = new Date(dateStr        + "T00:00:00");
+  const span   = xEnd - past || 1;
+  return PAD.left + ((d - past) / span) * pW();
+}
+
+ // Cache exact canvas geometry used for this render
+  S.poly._pW = pW(); S.poly._pH = pH();
+  S.poly._canvasW = canvas.width; S.poly._canvasH = canvas.height;
+
+
+// ── Plot interaction ──────────────────────────────────────────────
+canvas.addEventListener("click", (e) => {
+  if (S.curveOn) return;
+  if (S.poly.active) return;   // poly mode handles its own clicks
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const py = e.clientY - rect.top;
+  if (px < PAD.left || px > PAD.left + pW()) return;
+
+  const draw = drawAtX(px);
+  if (!draw) return;
+
+  document.getElementById("ib-date").textContent = draw.DrawDate;
+  document.getElementById("ib-idx").textContent  = `Draw #${draw.DrawIndex}`;
+
+  const ballsEl = document.getElementById("ib-balls");
+  ballsEl.innerHTML = "";
+  for (let s = 1; s <= 5; s++) {
+    const b = document.createElement("div");
+    b.className = "ball";
+    b.style.background = SET_COLORS[s-1];
+    b.style.color = "#1e1e2e";
+    b.textContent = draw[`Nbr${s}`];
+    ballsEl.appendChild(b);
+  }
+  if (draw.Nbr6 != null) {
+    const b = document.createElement("div");
+    b.className = "ball";
+    b.style.background = SET_COLORS[5];
+    b.style.color = "#1e1e2e";
+    b.textContent = draw.Nbr6;
+    ballsEl.appendChild(b);
+  }
+
+const past_ms  = S.poly._past_ms;
+const xEnd_ms  = S.poly._xEnd_ms;
+const span_ms  = xEnd_ms - past_ms || 1;
+const clicked_ms = past_ms + ((mx - PAD.left) / _pW) * span_ms;
+
+const clicked_val =
+  minV + ((PAD.top + _pH - my) / _pH) * (maxV - minV);
+
+2️⃣ Schema definitions
+
+CREATE TABLE [dbo].[ForecastPredictions](
+	[ForecastPredictionId] [bigint] IDENTITY(1,1) NOT NULL,
+	[LottoType] [char](2) NOT NULL,
+	[DrawDate] [date] NOT NULL,
+	[SetNumber] [tinyint] NOT NULL,
+	[SafeLow] [int] NOT NULL,
+	[SafeHigh] [int] NOT NULL,
+	[HotLow] [int] NULL,
+	[HotHigh] [int] NULL,
+	[ModelVersion] [varchar](50) NOT NULL,
+	[CreatedAt] [datetime2](0) NOT NULL,
+ CONSTRAINT [PK_ForecastPredictions] PRIMARY KEY CLUSTERED 
+(
+	[ForecastPredictionId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING OFF
+GO
+
+ALTER TABLE [dbo].[ForecastPredictions] ADD  CONSTRAINT [DF_ForecastPredictions_CreatedAt]  DEFAULT (sysutcdatetime()) FOR [CreatedAt]
+GO
+
+CREATE TYPE dbo.ForecastBandSet AS TABLE (
+    SetNumber INT,
+    SafeLow   INT,
+    SafeHigh  INT,
+    HotLow    INT NULL,
+    HotHigh   INT NULL
+);

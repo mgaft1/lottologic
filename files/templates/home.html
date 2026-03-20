@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Arial, sans-serif;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+#navbar {
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 0.88rem;
+}
+#navbar a {
+  color: #89b4fa;
+  text-decoration: none;
+}
+#navbar a:hover { text-decoration: underline; }
+#navbar .logout {
+  margin-left: auto;
+  color: #f38ba8;
+}
+#content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  color: #6c7086;
+}
+</style>
+</head>
+<body>
+<div id="navbar">
+  <a href="/">Lotto Viewer</a>
+  <a href="/gaps">Gap Patterns</a>
+  <a href="/links">My Links</a>
+  <a href="/logout" class="logout">Sign out</a>
+</div>
+<div id="content">
+  <span style="font-size:1.1rem;color:#a6adc8;">Home</span>
+  <a href="/" style="color:#89b4fa;font-size:0.9rem;">→ Lotto Viewer</a>
+  <a href="/gaps" style="color:#89b4fa;font-size:0.9rem;">→ Gap Patterns</a>
+  <a href="/links" style="color:#89b4fa;font-size:0.9rem;">→ My Links</a>
+</div>
+</body>
+</html>

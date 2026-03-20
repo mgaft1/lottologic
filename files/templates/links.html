@@ -1,0 +1,594 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Links</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Arial, sans-serif;
+  background: #1e1e2e; color: #cdd6f4;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+
+/* ── Navbar ── */
+#navbar {
+  background: #181825; border-bottom: 1px solid #313244;
+  padding: 8px 16px; display: flex; align-items: center; gap: 16px;
+  font-size: 0.88rem; flex-shrink: 0;
+}
+#navbar a { color: #89b4fa; text-decoration: none; }
+#navbar a:hover { text-decoration: underline; }
+.nav-logout { margin-left: auto; color: #f38ba8 !important; }
+
+/* ── Main ── */
+#main { flex: 1; padding: 16px 20px; max-width: 860px; width: 100%; margin: 0 auto; }
+
+/* ── Add form ── */
+#add-section {
+  background: #181825; border: 1px solid #313244; border-radius: 6px;
+  padding: 14px 16px; margin-bottom: 20px;
+}
+#add-section h2 { font-size: 0.88rem; color: #89b4fa; margin-bottom: 10px; }
+.form-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+.form-row select, .form-row input[type=text] {
+  background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+  padding: 6px 10px; border-radius: 4px; font-size: 0.85rem; outline: none;
+}
+.form-row select:focus, .form-row input[type=text]:focus { border-color: #89b4fa; }
+.form-row select { width: 120px; flex-shrink: 0; }
+.form-row input[type=text] { flex: 1; min-width: 220px; }
+.btn-add {
+  background: #89b4fa; color: #1e1e2e; border: none;
+  padding: 6px 16px; border-radius: 4px; cursor: pointer;
+  font-size: 0.85rem; font-weight: bold; flex-shrink: 0;
+}
+.btn-add:hover { background: #74c7ec; }
+.btn-add:disabled { background: #45475a; color: #6c7086; cursor: default; }
+#add-error { color: #f38ba8; font-size: 0.8rem; margin-top: 6px; display: none; }
+#add-spinner { color: #6c7086; font-size: 0.8rem; margin-top: 6px; display: none; }
+
+/* ── Category sections ── */
+.cat-section { margin-bottom: 24px; }
+.cat-title {
+  font-size: 0.75rem; color: #6c7086; text-transform: uppercase;
+  letter-spacing: 0.06em; margin-bottom: 8px; padding-bottom: 4px;
+  border-bottom: 1px solid #313244;
+}
+.cat-empty { color: #45475a; font-size: 0.82rem; padding: 6px 0; }
+
+/* ── Link rows ── */
+.link-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid #24243a;
+}
+.link-row:last-child { border-bottom: none; }
+.link-title {
+  flex: 1; color: #cdd6f4; text-decoration: none;
+  font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.link-title:hover { color: #89b4fa; text-decoration: underline; }
+.btn-sm {
+  background: #313244; color: #a6adc8; border: 1px solid #45475a;
+  padding: 2px 10px; border-radius: 4px; cursor: pointer;
+  font-size: 0.75rem; flex-shrink: 0;
+}
+.btn-sm:hover { background: #45475a; }
+.btn-del { color: #f38ba8; border-color: #f38ba8; }
+.btn-del:hover { background: #3e2030; }
+
+/* ── Mini Player ── */
+#player-panel {
+  display: none;
+  background: #181825;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 20px;
+  position: relative;
+}
+#player-panel.open { display: block; }
+#player-title {
+  font-size: 0.82rem; color: #a6adc8;
+  margin-bottom: 8px;
+  padding-right: 24px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#player-close {
+  position: absolute; top: 10px; right: 10px;
+  background: none; border: none; color: #6c7086;
+  font-size: 1rem; cursor: pointer; line-height: 1;
+}
+#player-close:hover { color: #f38ba8; }
+#player-frame {
+  width: 100%; aspect-ratio: 16/9;
+  border: none; border-radius: 4px;
+  background: #000;
+}
+#player-blocked {
+  display: none;
+  aspect-ratio: 16/9;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 4px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: #6c7086;
+  font-size: 0.88rem;
+  text-align: center;
+}
+#player-blocked.visible { display: flex; }
+#player-blocked a {
+  color: #89b4fa; text-decoration: none;
+  background: #313244; border: 1px solid #45475a;
+  padding: 7px 18px; border-radius: 4px; font-size: 0.85rem;
+}
+#player-blocked a:hover { background: #45475a; }
+
+/* ── Modal ── */
+#modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6); z-index: 100;
+  align-items: center; justify-content: center;
+}
+#modal-overlay.open { display: flex; }
+#modal {
+  background: #181825; border: 1px solid #313244; border-radius: 8px;
+  padding: 20px 24px; width: 100%; max-width: 480px;
+}
+#modal h2 { font-size: 0.95rem; color: #89b4fa; margin-bottom: 14px; }
+.modal-field { margin-bottom: 12px; }
+.modal-field label { display: block; font-size: 0.78rem; color: #a6adc8; margin-bottom: 4px; }
+.modal-field select, .modal-field input[type=text] {
+  width: 100%; background: #313244; color: #cdd6f4;
+  border: 1px solid #45475a; padding: 7px 10px;
+  border-radius: 4px; font-size: 0.85rem; outline: none;
+}
+.modal-field select:focus, .modal-field input[type=text]:focus { border-color: #89b4fa; }
+.modal-title-preview {
+  font-size: 0.78rem; color: #a6e3a1; margin-top: 4px; min-height: 1.2em;
+}
+.modal-error { color: #f38ba8; font-size: 0.78rem; margin-top: 4px; display: none; }
+.modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.btn-save {
+  background: #89b4fa; color: #1e1e2e; border: none;
+  padding: 6px 18px; border-radius: 4px; cursor: pointer;
+  font-size: 0.85rem; font-weight: bold;
+}
+.btn-save:hover { background: #74c7ec; }
+.btn-save:disabled { background: #45475a; color: #6c7086; cursor: default; }
+.btn-cancel {
+  background: #313244; color: #a6adc8; border: 1px solid #45475a;
+  padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;
+}
+.btn-cancel:hover { background: #45475a; }
+</style>
+</head>
+<body>
+
+<!-- Navbar -->
+<div id="navbar">
+  <a href="/home">Home</a>
+  <a href="/">Viewer</a>
+  <a href="/gaps">Gap Patterns</a>
+  <a href="/logout" class="nav-logout">Sign out</a>
+</div>
+
+<!-- Main -->
+<div id="main">
+
+  <!-- Add form -->
+  <div id="add-section">
+    <h2>Add YouTube Link</h2>
+    <div class="form-row">
+      <select id="add-category">
+        {% for cat in categories %}
+        <option value="{{ cat }}">{{ cat.capitalize() }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" id="add-url" placeholder="https://www.youtube.com/watch?v=...">
+    </div>
+    <div class="form-row" style="margin-top:8px;">
+      <input type="text" id="add-title" placeholder="Title (auto-filled or enter manually)" style="flex:1;">
+      <button class="btn-add" id="btn-add" disabled>Add</button>
+    </div>
+    <div id="add-spinner">Fetching title…</div>
+    <div id="add-error"></div>
+  </div>
+
+  <!-- Mini Player -->
+  <div id="player-panel">
+    <button id="player-close" title="Close">✕</button>
+    <div id="player-title"></div>
+    <iframe id="player-frame" allowfullscreen
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+    </iframe>
+    <div id="player-blocked">
+      <span>This video can't be embedded — the owner has disabled it.</span>
+      <a id="player-yt-link" href="#" target="_blank" rel="noopener">▶ Watch on YouTube</a>
+    </div>
+  </div>
+
+  <!-- Category sections -->
+  {% for cat in categories %}
+  <div class="cat-section">
+    <div class="cat-title">{{ cat.capitalize() }}</div>
+    <div id="list-{{ cat }}"><div class="cat-empty">No links yet.</div></div>
+  </div>
+  {% endfor %}
+
+</div><!-- /main -->
+
+<!-- Edit modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>Edit Link</h2>
+    <div class="modal-field">
+      <label>Category</label>
+      <select id="edit-category">
+        {% for cat in categories %}
+        <option value="{{ cat }}">{{ cat.capitalize() }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>YouTube URL</label>
+      <input type="text" id="edit-url" placeholder="https://www.youtube.com/watch?v=...">
+      <div class="modal-title-preview" id="edit-title-preview"></div>
+      <div class="modal-error" id="edit-error"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="btn-modal-cancel">Cancel</button>
+      <button class="btn-save" id="btn-modal-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const CATEGORIES = {{ categories | tojson }};
+let allLinks = {};   // { music: [...], cooking: [...], baking: [...] }
+let editingId = null;
+let editOriginalUrl = "";
+
+// ── Mini Player ──────────────────────────────────────────────────────────────
+
+const playerPanel = document.getElementById("player-panel");
+const playerFrame = document.getElementById("player-frame");
+const playerTitle = document.getElementById("player-title");
+const playerClose = document.getElementById("player-close");
+
+function extractVideoId(url) {
+  // Handles: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/embed/ID
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtu.be")) {
+      return u.pathname.slice(1).split(/[?&]/)[0];
+    }
+    return u.searchParams.get("v") || u.pathname.split("/").pop();
+  } catch (e) {
+    return null;
+  }
+}
+
+const playerBlocked = document.getElementById("player-blocked");
+const playerYtLink  = document.getElementById("player-yt-link");
+let   currentYtUrl  = "";
+
+function openPlayer(url, title) {
+  const vid = extractVideoId(url);
+  if (!vid) return;
+  currentYtUrl = url;
+  playerTitle.textContent = title;
+
+  // Reset state
+  playerFrame.style.display = "block";
+  playerBlocked.classList.remove("visible");
+  playerYtLink.href = url;
+
+  // Detect embedding blocked via error event
+  playerFrame.onerror = () => showBlocked(url);
+
+  // YouTube won't fire onerror — use postMessage instead
+  playerFrame.src = `https://www.youtube.com/embed/${vid}?autoplay=1&enablejsapi=1`;
+  playerPanel.classList.add("open");
+  playerPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function showBlocked(url) {
+  playerFrame.style.display = "none";
+  playerYtLink.href = url;
+  playerBlocked.classList.add("visible");
+}
+
+// YouTube iframe API sends error code 101/150 for embedding-disabled videos
+window.addEventListener("message", e => {
+  if (!e.origin.includes("youtube.com")) return;
+  try {
+    const data = JSON.parse(e.data);
+    if (data.event === "infoDelivery" && data.info && data.info.error) {
+      if ([101, 150].includes(data.info.error)) showBlocked(currentYtUrl);
+    }
+  } catch (_) {}
+});
+
+function closePlayer() {
+  playerFrame.src = "";   // stops playback
+  playerFrame.style.display = "block";
+  playerBlocked.classList.remove("visible");
+  playerPanel.classList.remove("open");
+}
+
+playerClose.addEventListener("click", closePlayer);
+
+// ── Render all lists ──────────────────────────────────────────────────────────
+
+function renderLists(grouped) {
+  allLinks = grouped;
+  for (const cat of CATEGORIES) {
+    const container = document.getElementById(`list-${cat}`);
+    const links = grouped[cat] || [];
+    if (!links.length) {
+      container.innerHTML = `<div class="cat-empty">No links yet.</div>`;
+      continue;
+    }
+    container.innerHTML = "";
+    for (const link of links) {
+      const row = document.createElement("div");
+      row.className = "link-row";
+      row.dataset.id = link.Id;
+      row.innerHTML = `
+        <a class="link-title" href="#" title="Play: ${escHtml(link.Url)}"
+           data-url="${escHtml(link.Url)}" data-title="${escHtml(link.Title)}"
+           >${escHtml(link.Title)}</a>
+        <button class="btn-sm btn-edit" data-id="${link.Id}">Edit</button>
+        <button class="btn-sm btn-del" data-id="${link.Id}">Delete</button>
+      `;
+      container.appendChild(row);
+    }
+  }
+
+  // Bind play/edit/delete buttons
+  document.querySelectorAll(".link-title").forEach(a =>
+    a.addEventListener("click", e => {
+      e.preventDefault();
+      openPlayer(a.dataset.url, a.dataset.title);
+    })
+  );
+  document.querySelectorAll(".btn-edit").forEach(btn =>
+    btn.addEventListener("click", () => openEdit(parseInt(btn.dataset.id)))
+  );
+  document.querySelectorAll(".btn-del").forEach(btn =>
+    btn.addEventListener("click", () => deleteLink(parseInt(btn.dataset.id)))
+  );
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+
+async function loadLinks() {
+  const r = await fetch("/api/links");
+  const data = await r.json();
+  renderLists(data);
+}
+
+// ── Add link ──────────────────────────────────────────────────────────────────
+
+const btnAdd      = document.getElementById("btn-add");
+const addUrl      = document.getElementById("add-url");
+const addTitle    = document.getElementById("add-title");
+const addCat      = document.getElementById("add-category");
+const addError    = document.getElementById("add-error");
+const addSpinner  = document.getElementById("add-spinner");
+
+function showAddError(msg) {
+  addError.textContent = msg;
+  addError.style.display = "block";
+}
+function clearAddError() {
+  addError.style.display = "none";
+  addError.textContent = "";
+}
+
+function updateAddBtn() {
+  btnAdd.disabled = !addTitle.value.trim();
+}
+
+// Auto-fetch title when URL is entered
+let addFetchTimer = null;
+addUrl.addEventListener("input", () => {
+  clearTimeout(addFetchTimer);
+  clearAddError();
+  addTitle.value = "";
+  updateAddBtn();
+
+  const url = addUrl.value.trim();
+  if (!url) return;
+
+  addFetchTimer = setTimeout(async () => {
+    addSpinner.style.display = "block";
+    try {
+      const r = await fetch("/api/links/fetch_title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await r.json();
+      if (r.ok && data.title) {
+        addTitle.value = data.title;
+      } else {
+        // Fetch failed — leave field empty so user can type
+        showAddError("Could not fetch title automatically — please enter it manually.");
+      }
+    } catch (e) {
+      showAddError("Could not fetch title automatically — please enter it manually.");
+    } finally {
+      addSpinner.style.display = "none";
+      updateAddBtn();
+    }
+  }, 600);
+});
+
+// Enable/disable Add button as user types title
+addTitle.addEventListener("input", updateAddBtn);
+
+btnAdd.addEventListener("click", async () => {
+  clearAddError();
+  const url   = addUrl.value.trim();
+  const title = addTitle.value.trim();
+  if (!url)   { showAddError("Please enter a YouTube URL."); return; }
+  if (!title) { showAddError("Please enter a title."); return; }
+
+  btnAdd.disabled = true;
+  addSpinner.style.display = "block";
+
+  const r = await fetch("/api/links", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category: addCat.value, url, title }),
+  });
+
+  addSpinner.style.display = "none";
+  updateAddBtn();
+
+  if (r.ok) {
+    addUrl.value   = "";
+    addTitle.value = "";
+    updateAddBtn();
+    await loadLinks();
+  } else {
+    const data = await r.json();
+    showAddError(data.error || "An error occurred.");
+  }
+});
+
+addTitle.addEventListener("keydown", e => { if (e.key === "Enter") btnAdd.click(); });
+addUrl.addEventListener("keydown",   e => { if (e.key === "Enter") addTitle.focus(); });
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+
+async function deleteLink(id) {
+  if (!confirm("Delete this link?")) return;
+  const r = await fetch(`/api/links/${id}`, { method: "DELETE" });
+  if (r.ok) await loadLinks();
+}
+
+// ── Edit modal ────────────────────────────────────────────────────────────────
+
+const modal        = document.getElementById("modal-overlay");
+const editCat      = document.getElementById("edit-category");
+const editUrl      = document.getElementById("edit-url");
+const editPreview  = document.getElementById("edit-title-preview");
+const editError    = document.getElementById("edit-error");
+const btnSave      = document.getElementById("btn-modal-save");
+const btnCancel    = document.getElementById("btn-modal-cancel");
+
+function openEdit(id) {
+  // Find link across all categories
+  let link = null;
+  for (const cat of CATEGORIES) {
+    link = (allLinks[cat] || []).find(l => l.Id === id);
+    if (link) break;
+  }
+  if (!link) return;
+
+  editingId = id;
+  editOriginalUrl = link.Url;
+  editCat.value = link.Category;
+  editUrl.value = link.Url;
+  editPreview.textContent = link.Title;
+  editError.style.display = "none";
+  btnSave.disabled = false;
+  modal.classList.add("open");
+}
+
+btnCancel.addEventListener("click", () => {
+  modal.classList.remove("open");
+  editingId = null;
+});
+
+modal.addEventListener("click", e => {
+  if (e.target === modal) { modal.classList.remove("open"); editingId = null; }
+});
+
+// Re-fetch title when URL changes
+let fetchTimer = null;
+editUrl.addEventListener("input", () => {
+  clearTimeout(fetchTimer);
+  editError.style.display = "none";
+  editPreview.textContent = "…";
+  btnSave.disabled = true;
+  fetchTimer = setTimeout(async () => {
+    const url = editUrl.value.trim();
+    if (!url || url === editOriginalUrl) {
+      // Restore original title if URL unchanged
+      if (url === editOriginalUrl) {
+        let link = null;
+        for (const cat of CATEGORIES) {
+          link = (allLinks[cat] || []).find(l => l.Id === editingId);
+          if (link) break;
+        }
+        editPreview.textContent = link ? link.Title : "";
+      } else {
+        editPreview.textContent = "";
+      }
+      btnSave.disabled = false;
+      return;
+    }
+    const r = await fetch("/api/links/fetch_title", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      editPreview.textContent = data.title;
+      editError.style.display = "none";
+      btnSave.disabled = false;
+    } else {
+      editPreview.textContent = "";
+      editError.textContent = data.error || "Could not read video title";
+      editError.style.display = "block";
+      btnSave.disabled = true;
+    }
+  }, 600);
+});
+
+btnSave.addEventListener("click", async () => {
+  if (!editingId) return;
+  editError.style.display = "none";
+  btnSave.disabled = true;
+
+  const r = await fetch(`/api/links/${editingId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category: editCat.value, url: editUrl.value.trim() }),
+  });
+
+  if (r.ok) {
+    modal.classList.remove("open");
+    editingId = null;
+    await loadLinks();
+  } else {
+    const data = await r.json();
+    editError.textContent = data.error || "Save failed.";
+    editError.style.display = "block";
+    btnSave.disabled = false;
+  }
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+loadLinks();
+</script>
+</body>
+</html>

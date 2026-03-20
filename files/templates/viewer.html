@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lotto Viewer — {{ lotto_labels.get(lotto_type, lotto_type) }}</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Arial, sans-serif; background: #1e1e2e; color: #cdd6f4;
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ── Top bar ── */
+#topbar {
+  background: #181825; border-bottom: 1px solid #313244;
+  padding: 6px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  flex-shrink: 0; font-size: 0.85rem;
+}
+#topbar select { background:#313244; color:#cdd6f4; border:1px solid #45475a;
+  padding:4px 8px; border-radius:4px; cursor:pointer; }
+#topbar button { background:#313244; color:#cdd6f4; border:1px solid #45475a;
+  padding:4px 10px; border-radius:4px; cursor:pointer; }
+#topbar button:hover  { background:#45475a; }
+#topbar button.active { background:#89b4fa; color:#1e1e2e; border-color:#89b4fa; }
+.sep { color:#45475a; padding:0 2px; }
+#window-info { color:#6c7086; font-size:0.78rem; margin-left:4px; }
+
+/* ── Canvas area ── */
+#canvas-wrap { flex:1; position:relative; overflow:hidden; padding:8px 12px 0 12px; }
+#plot-canvas { display:block; width:100%; height:100%; cursor:crosshair; }
+
+/* ── Scrollbar row ── */
+#scrollbar-row {
+  flex-shrink:0; padding:4px 12px 2px 12px;
+  display:flex; align-items:center; gap:8px;
+}
+#scrollbar { flex:1; accent-color:#89b4fa; height:6px; }
+#scroll-label { font-size:0.78rem; color:#a6adc8; min-width:240px; text-align:right; }
+
+/* ── Curve toolbar ── */
+#curve-toolbar {
+  flex-shrink:0; background:#181825; border-top:1px solid #313244;
+  padding:4px 12px; display:flex; align-items:center; gap:10px; font-size:0.8rem;
+}
+#curve-toolbar label { color:#a6adc8; }
+#curve-toolbar input[type=color]  { width:26px; height:20px; border:none; padding:0; background:none; cursor:pointer; }
+#curve-toolbar input[type=range]  { accent-color:#a6e3a1; width:60px; }
+.curve-btn { background:#313244; border:1px solid #45475a;
+  padding:3px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem; }
+
+/* ── Dataset toolbar ── */
+#dataset-toolbar {
+  flex-shrink:0; background:#181825; border-top:1px solid #313244;
+  padding:4px 12px; display:flex; align-items:center; gap:12px; font-size:0.8rem;
+}
+.ds-check-wrap { display:flex; align-items:center; gap:4px; cursor:pointer; }
+.ds-check-wrap input[type=checkbox] { width:13px; height:13px; cursor:pointer; accent-color:var(--ds-color); }
+.ds-check-wrap span { color:var(--ds-color); font-size:0.78rem; }
+#btn-redraw {
+  background:#89b4fa; color:#1e1e2e; border:none;
+  padding:3px 14px; border-radius:4px; cursor:pointer; font-size:0.8rem; font-weight:bold;
+  margin-left:6px;
+}
+#btn-redraw:hover { background:#b4d0f7; }
+
+/* ── Dataset fade when curve/poly active ── */
+#plot-canvas.mode-curve  { cursor: crosshair; }
+#plot-canvas.mode-poly   { cursor: cell; }
+.datasets-faded .ds-check-wrap span { opacity: 0.4; }
+.datasets-faded #btn-redraw { opacity: 0.4; pointer-events: none; }
+
+/* ── Polynomial toolbar ── */
+#poly-toolbar {
+  flex-shrink:0; background:#181825; border-top:1px solid #313244;
+  padding:4px 12px; display:flex; align-items:center; gap:10px; font-size:0.8rem;
+}
+#poly-toolbar label { color:#a6adc8; }
+#chk-poly { width:14px; height:14px; cursor:pointer; accent-color:#f38ba8; }
+.led {
+  width:10px; height:10px; border-radius:50%; display:inline-block;
+  background:#2a2a3a; border:1px solid #45475a;
+}
+.led.lit { background:#f38ba8; box-shadow:0 0 5px #f38ba8; border-color:#f38ba8; }
+#poly-clear-btn {
+  background:#313244; color:#f38ba8; border:1px solid #45475a;
+  padding:3px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;
+}
+#poly-clear-btn:hover { background:#45475a; }
+#poly-status { color:#6c7086; font-size:0.75rem; margin-left:4px; }
+
+/* ── Bands toolbar ── */
+#bands-toolbar {
+  flex-shrink:0; background:#181825; border-top:1px solid #313244;
+  padding:4px 12px; display:flex; align-items:center; gap:10px; font-size:0.8rem; color:#a6adc8;
+}
+#chk-bands { width:14px; height:14px; cursor:pointer; accent-color:#2dd4bf; }
+
+/* ── Future Corridor Modal ── */
+#fc-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:200;
+  display:flex; align-items:center; justify-content:center;
+}
+#fc-modal {
+  background:#181825; border:1px solid #45475a; border-radius:8px;
+  padding:0; width:360px; max-width:95vw; box-shadow:0 8px 32px rgba(0,0,0,0.6);
+}
+#fc-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 14px 6px 14px; border-bottom:1px solid #313244;
+}
+#fc-title { font-size:0.92rem; font-weight:bold; color:#89b4fa; }
+#fc-close {
+  background:none; border:none; color:#6c7086; cursor:pointer;
+  font-size:1rem; padding:0 4px; line-height:1;
+}
+#fc-close:hover { color:#f38ba8; }
+#fc-subheader {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:6px 14px; font-size:0.8rem; color:#a6adc8;
+  border-bottom:1px solid #313244;
+}
+#fc-order-row {
+  padding:8px 14px; display:flex; flex-direction:column; gap:4px;
+  border-bottom:1px solid #313244; font-size:0.8rem; color:#a6adc8;
+}
+#fc-order-row input[type=checkbox] { accent-color:#89b4fa; cursor:pointer; }
+#fc-order-note { font-size:0.72rem; color:#6c7086; margin-left:20px; }
+#fc-grid {
+  width:100%; border-collapse:collapse; margin:0; font-size:0.82rem;
+}
+#fc-grid th, #fc-grid td { padding:5px 10px; text-align:center; }
+#fc-grid thead tr:first-child th { font-size:0.72rem; color:#6c7086; padding-bottom:2px; }
+.fc-th-set { text-align:left !important; color:#6c7086 !important; min-width:44px; }
+.fc-th-safe { color:#2dd4bf !important; }
+.fc-th-hot  { color:#f87171 !important; }
+.fc-td-label { text-align:left; color:#a6adc8; font-size:0.78rem; }
+.fc-td-safe {
+  background:#313244; color:#cdd6f4; border-radius:3px;
+  font-weight:bold; min-width:40px;
+}
+.fc-td-hot {
+  background:#f38ba8; color:#1e1e2e; border-radius:3px;
+  font-weight:bold; min-width:40px;
+}
+.fc-td-hot-null { background:#24243a; color:#45475a; border-radius:3px; min-width:40px; }
+#fc-status { padding:6px 14px 10px 14px; font-size:0.75rem; color:#6c7086; min-height:1.4em; }
+
+/* ── Status bar ── */
+#statusbar {
+  flex-shrink:0; background:#181825; border-top:1px solid #313244;
+  padding:3px 12px; font-size:0.78rem; color:#a6adc8;
+  display:flex; gap:20px; align-items:center;
+}
+
+/* ── Inspection popup ── */
+#inspect-box {
+  position:absolute; display:none;
+  background:#313244; border:1px solid #89b4fa; border-radius:6px;
+  padding:10px 14px; font-size:0.82rem; pointer-events:none;
+  min-width:175px; z-index:10;
+}
+#inspect-box .ib-date  { color:#89b4fa; font-weight:bold; margin-bottom:4px; }
+#inspect-box .ib-idx   { color:#a6adc8; font-size:0.75rem; margin-bottom:6px; }
+#inspect-box .ib-balls { display:flex; flex-wrap:wrap; gap:5px; }
+.ball {
+  width:28px; height:28px; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:0.75rem; font-weight:bold;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ── -->
+<div id="topbar">
+  <select id="sel-lotto">
+    {% for lt in lotto_types %}
+    <option value="{{ lt }}" {% if lt == lotto_type %}selected{% endif %}>
+      {{ lotto_labels.get(lt, lt) }}
+    </option>
+    {% endfor %}
+  </select>
+
+  <a href="/home" style="color:#89b4fa;font-size:0.85rem;text-decoration:none;padding:4px 8px;background:#313244;border:1px solid #45475a;border-radius:4px;">Home</a>
+
+  <span class="sep">|</span>
+
+  {% for d in window_days %}
+  <button class="btn-days {% if d == days %}active{% endif %}" data-days="{{ d }}">{{ d }}</button>
+  {% endfor %}
+
+  <span class="sep">|</span>
+
+  <button id="btn-start">⏮ Start</button>
+  <button id="btn-left">◀ Left</button>
+  <button id="btn-right">Right ▶</button>
+  <button id="btn-end">End ⏭</button>
+
+  <span class="sep">|</span>
+  <button id="btn-future-corridor">Future Corridor</button>
+
+  <span id="window-info"></span>
+</div>
+
+<!-- ── Canvas ── -->
+<div id="canvas-wrap">
+  <canvas id="plot-canvas"></canvas>
+  <div id="inspect-box">
+    <div class="ib-date" id="ib-date"></div>
+    <div class="ib-idx"  id="ib-idx"></div>
+    <div class="ib-balls" id="ib-balls"></div>
+  </div>
+</div>
+
+<!-- ── Scrollbar ── -->
+<div id="scrollbar-row">
+  <span style="font-size:0.75rem;color:#6c7086;">{{ index_lo }}</span>
+  <input type="range" id="scrollbar"
+         min="{{ index_lo }}" max="{{ index_hi }}"
+         value="{{ index_hi }}">
+  <span style="font-size:0.75rem;color:#6c7086;">{{ index_hi }}</span>
+  <span id="scroll-label"></span>
+</div>
+
+<!-- ── Curve toolbar ── -->
+<div id="curve-toolbar" style="display:none;">
+  <label>Draw:</label>
+  <button id="btn-curve-toggle" class="curve-btn" style="color:#a6e3a1;">Off</button>
+  <label>Color:</label>
+  <input type="color" id="curve-color" value="#a6e3a1">
+  <label>Width:</label>
+  <input type="range" id="curve-width" min="1" max="6" value="2">
+  <button id="btn-curve-undo"  class="curve-btn" style="color:#f38ba8;">Undo</button>
+  <button id="btn-curve-clear" class="curve-btn" style="color:#f38ba8;">Clear</button>
+  <span style="color:#45475a; font-size:0.75rem; margin-left:6px;">
+    Exploratory curve — no predictive meaning
+  </span>
+</div>
+
+<!-- ── Dataset toolbar ── -->
+<div id="dataset-toolbar">
+  <span style="color:#6c7086;font-size:0.78rem;">Datasets:</span>
+  <label class="ds-check-wrap" style="--ds-color:#89b4fa"><input type="checkbox" id="chk-1" checked><span>Nbr1</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#a6e3a1"><input type="checkbox" id="chk-2" checked><span>Nbr2</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#fab387"><input type="checkbox" id="chk-3" checked><span>Nbr3</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#f9e2af"><input type="checkbox" id="chk-4" checked><span>Nbr4</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#cba6f7"><input type="checkbox" id="chk-5" checked><span>Nbr5</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#f38ba8"><input type="checkbox" id="chk-6" checked><span>{% if lotto_type == 'FL' %}Nbr6{% elif lotto_type in ('CA', 'MM') %}Mega{% elif lotto_type == 'PB' %}PB{% elif lotto_type == 'PD' %}DP{% else %}Nbr6 (bonus){% endif %}</span></label>
+  <button id="btn-redraw">Redraw</button>
+</div>
+
+<!-- ── Polynomial toolbar ── -->
+<div id="poly-toolbar">
+  <input type="checkbox" id="chk-poly">
+  <label for="chk-poly">Cubic fit:</label>
+  <span class="led" id="led-1"></span>
+  <span class="led" id="led-2"></span>
+  <span class="led" id="led-3"></span>
+  <span class="led" id="led-4"></span>
+  <span id="poly-pt-count" style="color:#f38ba8;font-size:0.75rem;min-width:52px;"></span>
+  <button id="poly-clear-btn">Clear</button>
+  <span id="poly-status">Check to begin selecting 4 points</span>
+</div>
+
+<!-- ── Bands toolbar (visible only when exactly 1 set is checked) ── -->
+<div id="bands-toolbar" style="display:none;">
+  <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+    <input type="checkbox" id="chk-bands"> Show Bands
+  </label>
+  <span id="bands-legend" style="display:none;align-items:center;gap:12px;margin-left:6px;font-size:0.75rem;">
+    <span><span style="color:#2dd4bf;font-weight:bold;">━━</span> SAFE</span>
+    <span><span style="color:#f87171;">╌ ╌</span> HOT</span>
+  </span>
+</div>
+
+<!-- ── Status bar ── -->
+<div id="statusbar">
+  <span id="status-window"></span>
+  <span id="status-count"></span>
+  <span id="status-hover"></span>
+</div>
+
+<!-- ── Future Corridor Modal ── -->
+<div id="fc-overlay" style="display:none;">
+  <div id="fc-modal">
+    <div id="fc-header">
+      <span id="fc-title">Future Corridor</span>
+      <button id="fc-close">✕</button>
+    </div>
+    <div id="fc-subheader">
+      <span id="fc-lotto-label"></span>
+      <span id="fc-date-label"></span>
+    </div>
+    <div id="fc-order-row">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="chk-safe-order">
+        Apply SAFE forward/backward ordering
+      </label>
+      <span id="fc-order-note">SAFE bands only. HOT bands unaffected.</span>
+    </div>
+    <table id="fc-grid">
+      <thead>
+        <tr>
+          <th></th>
+          <th colspan="2" class="fc-th-safe">SAFE</th>
+          <th colspan="2" class="fc-th-hot">HOT</th>
+        </tr>
+        <tr>
+          <th class="fc-th-set"></th>
+          <th class="fc-th-safe">Low</th>
+          <th class="fc-th-safe">High</th>
+          <th class="fc-th-hot">Low</th>
+          <th class="fc-th-hot">High</th>
+        </tr>
+      </thead>
+      <tbody id="fc-tbody"></tbody>
+    </table>
+    <div id="fc-status"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ── Initial state from server ─────────────────────────────────────
+const S = {
+  lotto:      "{{ lotto_type }}",
+  days:       {{ days }},
+  anchor:     "{{ anchor }}",         // dtCutOffNow  (YYYY-MM-DD)
+  cutoffPast: "{{ cutoff_past }}",    // dtCutOffPast (YYYY-MM-DD)
+  earliest:   "{{ earliest }}",
+  latest:     "{{ latest }}",
+  indexLo:    {{ index_lo }},
+  indexHi:    {{ index_hi }},
+  effDays:    {{ eff_days }},
+  draws:      [],
+  curveOn:    false,
+  curves:     [],
+  curCurve:   null,
+  visibleSets: [1,2,3,4,5,6],   // all on at page load
+  bandsOn:     false,
+  bandData:    [],
+  poly: {
+    active:  false,      // checkbox on?
+    points:  [],         // [{di, val}]  data-space: draw-index, lotto value
+    coeff:   null,       // [a,b,c,d] once 4 pts captured
+    minV:    0,          // last-rendered Y range — kept in sync with render()
+    maxV:    1,
+  },
+};
+
+// ── DOM ───────────────────────────────────────────────────────────
+const canvas    = document.getElementById("plot-canvas");
+const ctx2d     = canvas.getContext("2d");
+const wrap      = document.getElementById("canvas-wrap");
+const scrollbar = document.getElementById("scrollbar");
+const scrollLbl = document.getElementById("scroll-label");
+const winInfo   = document.getElementById("window-info");
+const statusWin = document.getElementById("status-window");
+const statusCnt = document.getElementById("status-count");
+const statusHov = document.getElementById("status-hover");
+const inspBox   = document.getElementById("inspect-box");
+
+// ── Per-set colours ───────────────────────────────────────────────
+const SET_COLORS = ["#89b4fa","#a6e3a1","#fab387","#f9e2af","#cba6f7","#f38ba8"];
+
+// ── Fetch draws for current window ───────────────────────────────
+async function fetchDraws() {
+  const url = `/api/draws?lotto=${S.lotto}&cutoff_now=${S.anchor}&cutoff_past=${S.cutoffPast}`;
+  const r = await fetch(url);
+  S.draws = await r.json();
+}
+
+// ── Canvas sizing ─────────────────────────────────────────────────
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  canvas.width  = rect.width;
+  canvas.height = rect.height;
+}
+
+// ── Plot geometry ─────────────────────────────────────────────────
+const PAD = { top: 20, right: 36, bottom: 32, left: 10 };
+function pW() { return canvas.width  - PAD.left - PAD.right; }
+function pH() { return canvas.height - PAD.top  - PAD.bottom; }
+
+// Map a draw to an X pixel by its position index (equal spacing).
+// S._dateIndexMap is built at render time: dateStr -> position index (0-based).
+// One extra slot is reserved at the right for the "future draw" space.
+function xOfDate(dateStr) {
+  const map   = S._dateIndexMap;
+  const total = S._drawCount + 1;   // +1 for future space
+  if (!map || total <= 1) return PAD.left;
+  const i = (map[dateStr] !== undefined) ? map[dateStr] : total - 1;
+  return PAD.left + (i / (total - 1)) * pW();
+}
+
+function yOfValue(v, minV, maxV) {
+  if (maxV === minV) return PAD.top + pH() / 2;
+  return PAD.top + pH() - ((v - minV) / (maxV - minV)) * pH();
+}
+
+// Pixel X → nearest draw (by date proximity)
+function drawAtX(px) {
+  if (!S.draws.length) return null;
+  let best = null, bestDist = Infinity;
+  for (const d of S.draws) {
+    const dx = Math.abs(xOfDate(d.DrawDate) - px);
+    if (dx < bestDist) { bestDist = dx; best = d; }
+  }
+  return best;
+}
+
+// ── Render ────────────────────────────────────────────────────────
+function render() {
+  resizeCanvas();
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+
+  const draws = S.draws;
+
+  // Update labels
+  winInfo.textContent = S.cutoffPast + " → " + S.anchor +
+    (S.lotto === "PB" || S.lotto === "PD"
+      ? `  (${S.days}d × 0.6 = ${S.effDays}d)` : `  (${S.effDays}d)`);
+  statusWin.textContent = `${S.cutoffPast} → ${S.anchor}`;
+  statusCnt.textContent = draws.length + " draws";
+
+  if (!draws.length) {
+    ctx2d.fillStyle = "#585b70";
+    ctx2d.font = "14px Arial";
+    ctx2d.fillText("No draws in this window", PAD.left + 10, PAD.top + 30);
+    renderCurves();
+    return;
+  }
+
+  // Compute X-axis end: anchor + one average draw interval (future draw space)
+  // Average interval from last few draws; fallback to 3.5 days (CA ~Wed+Sat)
+  let drawIntervalMs = 3.5 * 86400000;
+  if (draws.length >= 2) {
+    const last  = new Date(draws[draws.length - 1].DrawDate + "T00:00:00");
+    const prev  = new Date(draws[draws.length - 2].DrawDate + "T00:00:00");
+    drawIntervalMs = Math.max(last - prev, 86400000);
+  }
+  const anchorMs = new Date(S.anchor + "T00:00:00").getTime();
+  S.poly._xEnd = new Date(anchorMs + drawIntervalMs);
+
+  // Pre-sort draws and cache ms timestamps for snap accuracy
+  const sortedDraws = [...draws].sort((a, b) => a.DrawDate < b.DrawDate ? -1 : 1);
+  sortedDraws.forEach(d => { d._ms = new Date(d.DrawDate + "T00:00:00").getTime(); });
+  S.poly._sortedDraws = sortedDraws;
+  S.poly._past_ms    = new Date(S.cutoffPast + "T00:00:00").getTime();
+  S.poly._xEnd_ms    = S.poly._xEnd.getTime();
+
+  // Build date->position index map for equal-spaced X axis
+  S._dateIndexMap = {};
+  sortedDraws.forEach((d, i) => { S._dateIndexMap[d.DrawDate] = i; });
+  S._drawCount = sortedDraws.length;
+
+  // Value range across visible sets only
+  let minV = Infinity, maxV = -Infinity;
+  for (const d of draws) {
+    for (const s of S.visibleSets) {
+      const v = d[`Nbr${s}`];
+      if (v != null) { minV = Math.min(minV, v); maxV = Math.max(maxV, v); }
+    }
+  }
+  const padV = Math.max(2, Math.round((maxV - minV) * 0.05));
+  minV -= padV; maxV += padV;
+  // Keep in sync so click handler uses identical Y mapping
+  S.poly.minV = minV; S.poly.maxV = maxV;
+  // Cache exact canvas geometry used for this render
+  S.poly._pW = pW(); S.poly._pH = pH();
+  S.poly._canvasW = canvas.width; S.poly._canvasH = canvas.height;
+
+  // Y grid: one line per integer ball value that actually appears, labels on RIGHT
+  // Collect every unique integer value visible in this window
+  const allVals = new Set();
+  for (const d of draws) {
+    for (const s of S.visibleSets) {
+      const v = d[`Nbr${s}`];
+      if (v != null) allVals.add(Math.round(v));
+    }
+  }
+  // Also include every integer between minV and maxV for a full proportional grid
+  for (let v = Math.ceil(minV); v <= Math.floor(maxV); v++) allVals.add(v);
+  const sortedVals = [...allVals].sort((a, b) => a - b);
+
+  ctx2d.font = "bold 11px Arial"; ctx2d.textAlign = "left";
+  for (const v of sortedVals) {
+    const y = yOfValue(v, minV, maxV);
+    if (y < PAD.top - 1 || y > PAD.top + pH() + 1) continue;
+    // Gridline
+    ctx2d.strokeStyle = "#6e7299"; ctx2d.lineWidth = 1.2;
+    ctx2d.beginPath(); ctx2d.moveTo(PAD.left, y); ctx2d.lineTo(PAD.left + pW(), y); ctx2d.stroke();
+    // Label on RIGHT
+    ctx2d.fillStyle = "#c8cfe8";
+    ctx2d.fillText(v, PAD.left + pW() + 4, y + 3);
+  }
+
+  // X vertical line for every draw; date labels at ~6 evenly spaced intervals
+  const labelStep = Math.max(1, Math.floor(draws.length / 6));
+  for (let i = 0; i < draws.length; i++) {
+    const x = xOfDate(draws[i].DrawDate);
+    ctx2d.strokeStyle = "#6e7299"; ctx2d.lineWidth = 1.2;
+    ctx2d.beginPath(); ctx2d.moveTo(x, PAD.top); ctx2d.lineTo(x, PAD.top + pH()); ctx2d.stroke();
+  }
+  ctx2d.fillStyle = "#c8cfe8"; ctx2d.font = "11px Arial"; ctx2d.textAlign = "center";
+  for (let i = 0; i < draws.length; i += labelStep) {
+    const x = xOfDate(draws[i].DrawDate);
+    ctx2d.fillText(draws[i].DrawDate.slice(0, 7), x, canvas.height - PAD.bottom + 14);
+  }
+
+  ctx2d.globalAlpha = 1.0;
+
+  // Sets 1–5: lines + dots (only visible sets)
+  for (let s = 1; s <= 5; s++) {
+    if (!S.visibleSets.includes(s)) continue;
+    const color = SET_COLORS[s - 1];
+    ctx2d.strokeStyle = color; ctx2d.lineWidth = 1.5;
+    ctx2d.beginPath();
+    let started = false;
+    for (const d of draws) {
+      const v = d[`Nbr${s}`];
+      if (v == null) continue;
+      const x = xOfDate(d.DrawDate), y = yOfValue(v, minV, maxV);
+      if (!started) { ctx2d.moveTo(x, y); started = true; } else ctx2d.lineTo(x, y);
+    }
+    ctx2d.stroke();
+    for (const d of draws) {
+      const v = d[`Nbr${s}`];
+      if (v == null) continue;
+      ctx2d.fillStyle = color;
+      ctx2d.beginPath(); ctx2d.arc(xOfDate(d.DrawDate), yOfValue(v, minV, maxV), 4.5, 0, Math.PI*2);
+      ctx2d.fill();
+    }
+  }
+
+  // Set 6 (bonus): dashed line + diamonds
+  const b6 = draws.filter(d => d.Nbr6 != null);
+  if (b6.length && S.visibleSets.includes(6)) {
+    ctx2d.strokeStyle = SET_COLORS[5]; ctx2d.lineWidth = 1;
+    ctx2d.setLineDash([4, 4]);
+    ctx2d.beginPath();
+    let started = false;
+    for (const d of b6) {
+      const x = xOfDate(d.DrawDate), y = yOfValue(d.Nbr6, minV, maxV);
+      if (!started) { ctx2d.moveTo(x, y); started = true; } else ctx2d.lineTo(x, y);
+    }
+    ctx2d.stroke(); ctx2d.setLineDash([]);
+    for (const d of b6) {
+      const x = xOfDate(d.DrawDate), y = yOfValue(d.Nbr6, minV, maxV), r = 5;
+      ctx2d.fillStyle = SET_COLORS[5];
+      ctx2d.beginPath(); ctx2d.moveTo(x, y-r); ctx2d.lineTo(x+r, y);
+      ctx2d.lineTo(x, y+r); ctx2d.lineTo(x-r, y); ctx2d.closePath(); ctx2d.fill();
+    }
+  }
+
+  ctx2d.globalAlpha = 1.0;  // restore before overlays
+  renderPolyPoints(minV, maxV);
+  renderPolyCurve(minV, maxV);
+  renderCurves();
+  renderBands(minV, maxV);
+}
+
+function renderCurves() {
+  const allCurves = S.curCurve ? [...S.curves, S.curCurve] : S.curves;
+  for (const c of allCurves) {
+    if (c.pts.length < 2) continue;
+    ctx2d.strokeStyle = c.color; ctx2d.lineWidth = c.width;
+    ctx2d.lineJoin = "round"; ctx2d.lineCap = "round";
+    ctx2d.beginPath();
+    ctx2d.moveTo(c.pts[0].x, c.pts[0].y);
+    for (let i = 1; i < c.pts.length; i++) ctx2d.lineTo(c.pts[i].x, c.pts[i].y);
+    ctx2d.stroke();
+  }
+}
+
+// ── Fetch SAFE/HOT bands for the one visible set ──────────────────
+async function fetchBands() {
+  if (!S.bandsOn || S.visibleSets.length !== 1) { S.bandData = []; return; }
+  const setNum = S.visibleSets[0];
+  const url = `/api/forecast_chart?lotto=${S.lotto}&cutoff_now=${S.anchor}&cutoff_past=${S.cutoffPast}`;
+  const r = await fetch(url);
+  const all = await r.json();
+  S.bandData = all.filter(row => row.SetNumber === setNum);
+}
+
+// ── Draw SAFE (teal solid) and HOT (red dashed) band lines ────────
+function renderBands(minV, maxV) {
+  if (!S.bandsOn || !S.bandData.length) return;
+
+  function drawLine(getVal, color, dash) {
+    ctx2d.strokeStyle = color;
+    ctx2d.lineWidth = 1.5;
+    ctx2d.setLineDash(dash);
+    ctx2d.beginPath();
+    let started = false;
+    for (const row of S.bandData) {
+      const v = getVal(row);
+      if (v == null) continue;
+      const x = xOfDate(row.DrawDate);
+      const y = yOfValue(v, minV, maxV);
+      if (!started) { ctx2d.moveTo(x, y); started = true; }
+      else ctx2d.lineTo(x, y);
+    }
+    ctx2d.stroke();
+    ctx2d.setLineDash([]);
+  }
+
+  drawLine(r => r.SafeHigh, "#2dd4bf", []);
+  drawLine(r => r.SafeLow,  "#2dd4bf", []);
+  drawLine(r => r.HotHigh,  "#f87171", [5, 4]);
+  drawLine(r => r.HotLow,   "#f87171", [5, 4]);
+}
+
+function renderPolyPoints(minV, maxV) {
+  if (!S.poly.active && !S.poly.points.length) return;
+  for (let i = 0; i < S.poly.points.length; i++) {
+    const p = S.poly.points[i];
+    const x = xOfDate(p.date);
+    const y = yOfValue(p.val, minV, maxV);
+    ctx2d.strokeStyle = "#f38ba8"; ctx2d.lineWidth = 2;
+    ctx2d.beginPath(); ctx2d.arc(x, y, 8, 0, Math.PI * 2); ctx2d.stroke();
+    ctx2d.fillStyle = "#f38ba8"; ctx2d.font = "bold 9px Arial"; ctx2d.textAlign = "center";
+    ctx2d.fillText(i + 1, x, y - 11);
+  }
+}
+
+function renderPolyCurve(minV, maxV) {
+  if (!S.poly.coeff || !S.draws.length) return;
+  // Evaluate curve using sorted draw order (same order fitCubic used)
+  const sortedDraws = [...S.draws].sort((a, b) => a.DrawDate < b.DrawDate ? -1 : 1);
+  ctx2d.strokeStyle = "#f38ba8"; ctx2d.lineWidth = 2.5;
+  ctx2d.setLineDash([]);
+  ctx2d.beginPath();
+  let started = false;
+  for (let i = 0; i < sortedDraws.length; i++) {
+    const y_data = evalCubic(S.poly.coeff, i);
+    if (isNaN(y_data) || !isFinite(y_data)) { started = false; continue; }
+    if (y_data < minV - 5 || y_data > maxV + 5) { started = false; continue; }
+    const x = xOfDate(sortedDraws[i].DrawDate);
+    const y = yOfValue(y_data, minV, maxV);
+    if (y < PAD.top - 5 || y > PAD.top + pH() + 5) { started = false; continue; }
+    if (!started) { ctx2d.moveTo(x, y); started = true; } else ctx2d.lineTo(x, y);
+  }
+  ctx2d.stroke();
+}
+
+// ── Refresh: fetch + render ───────────────────────────────────────
+async function refresh() {
+  await fetchDraws();
+  await fetchBands();
+  render();
+  // Sync scrollbar to anchor's nearest draw index
+  const r = await fetch(`/api/index_to_date?lotto=${S.lotto}&index=` +
+    await anchorToIndex());
+  // (scrollbar position already reflects anchor; no additional sync needed)
+}
+
+async function anchorToIndex() {
+  // We need the draw index that corresponds to S.anchor date.
+  // Use a reverse lookup via the draws array if available.
+  const d = S.draws.length ? S.draws[S.draws.length - 1] : null;
+  return d ? d.DrawIndex : S.indexHi;
+}
+
+// ── Navigation via /api/nav ───────────────────────────────────────
+async function navigate(dir) {
+  const r = await fetch(
+    `/api/nav?lotto=${S.lotto}&dir=${dir}&days=${S.days}&anchor=${S.anchor}`
+  );
+  const data = await r.json();
+  S.anchor     = data.anchor;
+  S.cutoffPast = data.cutoff_past;
+  S.effDays    = data.eff_days;
+  // Sync scrollbar to the draw index nearest to new anchor
+  const drawIndex = await dateToIndex(S.anchor);
+  scrollbar.value = drawIndex;
+  updateScrollLabel(drawIndex);
+  await refresh();
+}
+
+async function dateToIndex(dateStr) {
+  // Find nearest draw index for a date via the DB (via a draw lookup)
+  // We fetch the draw list and pick the last one, or use an approximate index
+  const draws = S.draws;
+  if (draws.length) return draws[draws.length - 1].DrawIndex;
+  return S.indexHi;
+}
+
+// ── Scrollbar ─────────────────────────────────────────────────────
+// Scrollbar: maps draw index → date → use as new anchor (dtCutOffNow)
+// NEVER triggers scraping. ONLY re-slices.
+async function updateScrollLabel(idx) {
+  const r = await fetch(`/api/index_to_date?lotto=${S.lotto}&index=${idx}`);
+  const data = await r.json();
+  const d = data.date || "";
+  scrollLbl.textContent = `draw ${idx}  ${d}`;
+  return d;
+}
+
+scrollbar.addEventListener("input", async () => {
+  const idx = parseInt(scrollbar.value);
+  const d = await updateScrollLabel(idx);
+  if (d) {
+    // Update anchor to this date; only re-slice, no scrape
+    S.anchor = d;
+    const pastDate = new Date(d + "T00:00:00");
+    pastDate.setDate(pastDate.getDate() - S.effDays);
+    S.cutoffPast = pastDate.toISOString().slice(0, 10);
+  }
+});
+
+scrollbar.addEventListener("change", async () => {
+  await fetchDraws();
+  render();
+});
+
+// ── Plot interaction ──────────────────────────────────────────────
+canvas.addEventListener("click", (e) => {
+  if (S.curveOn) return;
+  if (S.poly.active) return;   // poly mode handles its own clicks
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const py = e.clientY - rect.top;
+  if (px < PAD.left || px > PAD.left + pW()) return;
+
+  const draw = drawAtX(px);
+  if (!draw) return;
+
+  document.getElementById("ib-date").textContent = draw.DrawDate;
+  document.getElementById("ib-idx").textContent  = `Draw #${draw.DrawIndex}`;
+
+  const ballsEl = document.getElementById("ib-balls");
+  ballsEl.innerHTML = "";
+  for (let s = 1; s <= 5; s++) {
+    const b = document.createElement("div");
+    b.className = "ball";
+    b.style.background = SET_COLORS[s-1];
+    b.style.color = "#1e1e2e";
+    b.textContent = draw[`Nbr${s}`];
+    ballsEl.appendChild(b);
+  }
+  if (draw.Nbr6 != null) {
+    const b = document.createElement("div");
+    b.className = "ball";
+    b.style.background = SET_COLORS[5];
+    b.style.color = "#1e1e2e";
+    b.textContent = draw.Nbr6;
+    ballsEl.appendChild(b);
+  }
+
+  // Position popup
+  let bx = e.clientX - wrap.getBoundingClientRect().left + 14;
+  let by = e.clientY - wrap.getBoundingClientRect().top  + 14;
+  if (bx + 180 > wrap.offsetWidth)  bx -= 194;
+  if (by + 90  > wrap.offsetHeight) by -= 104;
+  inspBox.style.left    = bx + "px";
+  inspBox.style.top     = by + "px";
+  inspBox.style.display = "block";
+});
+
+document.addEventListener("click", (e) => {
+  if (!inspBox.contains(e.target) && e.target !== canvas)
+    inspBox.style.display = "none";
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  if (S.curveOn) return;
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  if (px < PAD.left || px > PAD.left + pW()) { statusHov.textContent = ""; return; }
+  const draw = drawAtX(px);
+  if (draw) {
+    statusHov.textContent =
+      `${draw.DrawDate}  draw #${draw.DrawIndex}  |  ` +
+      [1,2,3,4,5].map(s => draw[`Nbr${s}`]).join(" · ") +
+      (draw.Nbr6 != null ? (S.lotto === 'FL' ? ` · ${draw.Nbr6}` : `  +${draw.Nbr6}`) : "");
+  }
+});
+canvas.addEventListener("mouseleave", () => { statusHov.textContent = ""; });
+
+// ── Exploratory curve drawing ─────────────────────────────────────
+const btnCT = document.getElementById("btn-curve-toggle");
+const datasetToolbar = document.getElementById("dataset-toolbar");
+
+function updateFadeState() {
+  const faded = S.curveOn || S.poly.active;
+  datasetToolbar.classList.toggle('datasets-faded', faded);
+  canvas.classList.toggle('mode-curve', S.curveOn);
+  canvas.classList.toggle('mode-poly', S.poly.active);
+}
+
+btnCT.addEventListener("click", () => {
+  S.curveOn = !S.curveOn;
+  btnCT.textContent  = S.curveOn ? "On" : "Off";
+  btnCT.style.color  = S.curveOn ? "#1e1e2e" : "#a6e3a1";
+  btnCT.style.background = S.curveOn ? "#a6e3a1" : "#313244";
+  updateFadeState();
+});
+
+function canvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  if (!S.curveOn) return;
+  const p = canvasPos(e);
+  S.curCurve = {
+    color: document.getElementById("curve-color").value,
+    width: parseInt(document.getElementById("curve-width").value),
+    pts: [p],
+  };
+});
+canvas.addEventListener("mousemove", (e) => {
+  if (!S.curveOn || !S.curCurve) return;
+  S.curCurve.pts.push(canvasPos(e));
+  render();
+});
+function endCurve() {
+  if (!S.curveOn || !S.curCurve) return;
+  if (S.curCurve.pts.length > 1) S.curves.push(S.curCurve);
+  S.curCurve = null;
+  render();
+}
+canvas.addEventListener("mouseup",    endCurve);
+canvas.addEventListener("mouseleave", endCurve);
+
+document.getElementById("btn-curve-undo").addEventListener("click",  () => { S.curves.pop(); render(); });
+document.getElementById("btn-curve-clear").addEventListener("click", () => { S.curves = []; S.curCurve = null; render(); });
+
+// ── Redraw button: reads checkboxes → updates visibleSets → renders ─
+document.getElementById("btn-redraw").addEventListener("click", async () => {
+  S.visibleSets = [];
+  for (let s = 1; s <= 6; s++) {
+    if (document.getElementById(`chk-${s}`).checked) S.visibleSets.push(s);
+  }
+  // Show bands toolbar only when exactly one set is visible
+  const bandsToolbar = document.getElementById("bands-toolbar");
+  const exactlyOne = S.visibleSets.length === 1;
+  bandsToolbar.style.display = exactlyOne ? "flex" : "none";
+  if (!exactlyOne) {
+    // Reset bands state when multiple sets shown
+    S.bandsOn = false;
+    S.bandData = [];
+    document.getElementById("chk-bands").checked = false;
+    document.getElementById("bands-legend").style.display = "none";
+  }
+  await fetchBands();
+  render();
+});
+
+// ── Show Bands checkbox ───────────────────────────────────────────
+document.getElementById("chk-bands").addEventListener("change", async function() {
+  S.bandsOn = this.checked;
+  document.getElementById("bands-legend").style.display = this.checked ? "flex" : "none";
+  await fetchBands();
+  render();
+});
+
+// ── Window-size buttons ───────────────────────────────────────────
+document.querySelectorAll(".btn-days").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    S.days = parseInt(btn.dataset.days);
+    document.querySelectorAll(".btn-days").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    // Recalculate effective days and cutoffPast; anchor stays fixed
+    const r = await fetch(`/api/nav?lotto=${S.lotto}&dir=end&days=${S.days}&anchor=${S.anchor}`);
+    // We don't actually want END; we just want eff_days for the new size.
+    // Use a local calculation instead:
+    const isPbPd = (S.lotto === "PB" || S.lotto === "PD");
+    S.effDays = isPbPd ? Math.round(S.days * 0.6) : S.days;
+    const pastDate = new Date(S.anchor + "T00:00:00");
+    pastDate.setDate(pastDate.getDate() - S.effDays);
+    S.cutoffPast = pastDate.toISOString().slice(0, 10);
+    await refresh();
+  });
+});
+
+// ── Nav buttons ───────────────────────────────────────────────────
+document.getElementById("btn-start").addEventListener("click", () => navigate("start"));
+document.getElementById("btn-left"). addEventListener("click", () => navigate("left"));
+document.getElementById("btn-right").addEventListener("click", () => navigate("right"));
+document.getElementById("btn-end").  addEventListener("click", () => navigate("end"));
+
+// ── Lotto type switch ─────────────────────────────────────────────
+document.getElementById("sel-lotto").addEventListener("change", function() {
+  window.location.href = `/?lotto=${this.value}&days=${S.days}`;
+});
+
+// ── Resize ────────────────────────────────────────────────────────
+window.addEventListener("resize", render);
+
+// ── Polynomial: cubic fit (data-space) ───────────────────────────
+// Solves the 4×4 Vandermonde system for a cubic y = a + b·x + c·x² + d·x³
+// passing exactly through 4 points. Uses Gaussian elimination.
+function fitCubic(pts) {
+  // pts: [{date, val}, ...] — 4 points sorted by date
+  // x = position index 0..3 is too narrow; use global draw index for better scaling
+  // Map each point's date to its index in the full sorted draw list
+  const sortedDraws = [...S.draws].sort((a, b) => a.DrawDate < b.DrawDate ? -1 : 1);
+  const xs = pts.map(p => {
+    const idx = sortedDraws.findIndex(d => d.DrawDate === p.date);
+    return idx >= 0 ? idx : 0;
+  });
+  const ys = pts.map(p => p.val);
+
+  // Build 4×5 augmented Vandermonde matrix
+  const M = xs.map((x, i) => [1, x, x*x, x*x*x, ys[i]]);
+
+  // Gaussian elimination with partial pivoting
+  for (let col = 0; col < 4; col++) {
+    // Find pivot
+    let maxRow = col;
+    for (let r = col+1; r < 4; r++)
+      if (Math.abs(M[r][col]) > Math.abs(M[maxRow][col])) maxRow = r;
+    [M[col], M[maxRow]] = [M[maxRow], M[col]];
+
+    if (Math.abs(M[col][col]) < 1e-12) return null; // singular
+
+    for (let r = 0; r < 4; r++) {
+      if (r === col) continue;
+      const f = M[r][col] / M[col][col];
+      for (let c = col; c <= 4; c++) M[r][c] -= f * M[col][c];
+    }
+  }
+
+  // Back-substitute
+  return M.map((row, i) => row[4] / row[i]);  // [a, b, c, d]
+}
+
+function evalCubic(coeff, x) {
+  const [a, b, c, d] = coeff;
+  return a + b*x + c*x*x + d*x*x*x;
+}
+
+// ── LED helpers ───────────────────────────────────────────────────
+function updateLEDs() {
+  const n = S.poly.points.length;
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`led-${i}`).classList.toggle('lit', i <= n);
+  }
+  const ptCount = document.getElementById('poly-pt-count');
+  if (n === 0) {
+    ptCount.textContent = '';
+  } else if (n < 4) {
+    ptCount.textContent = `${n}/4`;
+  } else {
+    ptCount.textContent = '4/4 ✓';
+  }
+}
+
+function polyReset() {
+  S.poly.points = [];
+  S.poly.coeff  = null;
+  updateLEDs();
+  document.getElementById('poly-status').textContent =
+    S.poly.active ? 'Click 4 points on the chart' : 'Check to begin selecting 4 points';
+  render();
+}
+
+// ── Polynomial checkbox ───────────────────────────────────────────
+document.getElementById('chk-poly').addEventListener('change', function() {
+  S.poly.active = this.checked;
+  polyReset();
+  updateFadeState();
+});
+
+document.getElementById('poly-clear-btn').addEventListener('click', () => {
+  polyReset();
+});
+
+// ── Canvas poly click: snap to nearest visible data point ────────
+canvas.addEventListener('click', (e) => {
+  if (!S.poly.active) return;
+  if (!S.draws.length) return;
+  if (S.poly.points.length >= 4) return;
+
+  e.stopImmediatePropagation();
+
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  if (mx < PAD.left || mx > PAD.left + pW()) return;
+
+  const minV = S.poly.minV;
+  const maxV = S.poly.maxV;
+
+  // Use geometry cached at last render() — guarantees identical coordinate system
+  const _pW = S.poly._pW || pW();
+  const _pH = S.poly._pH || pH();
+
+  // ── Step 1: invert X pixel → timestamp using cached geometry ──
+  // Find nearest draw by X pixel distance (index-based spacing)
+  const clicked_ms = 0; // unused placeholder — snap uses pixel distance below
+
+  // Find draw whose X pixel position is closest to the click (index-based spacing)
+  const sortedDraws = S.poly._sortedDraws || [...S.draws].sort((a,b) => a.DrawDate < b.DrawDate ? -1 : 1);
+  let nearestDi = 0;
+  let bestDt = Math.abs(xOfDate(sortedDraws[0].DrawDate) - mx);
+  for (let i = 1; i < sortedDraws.length; i++) {
+    const dt = Math.abs(xOfDate(sortedDraws[i].DrawDate) - mx);
+    if (dt < bestDt) { bestDt = dt; nearestDi = i; }
+  }
+  const draw = sortedDraws[nearestDi];
+
+  // ── Step 2: invert Y pixel → value using cached geometry ──
+  // yOfValue: py = PAD.top + _pH - ((v - minV) / (maxV - minV)) * _pH
+  // Inverse:  v  = minV + ((PAD.top + _pH - my) / _pH) * (maxV - minV)
+  const clicked_val = minV + ((PAD.top + _pH - my) / _pH) * (maxV - minV);
+
+  let bestDv  = Infinity;
+  let bestVal = -1;
+  for (const s of S.visibleSets) {
+    const v = draw[`Nbr${s}`];
+    if (v == null) continue;
+    const dv = Math.abs(v - clicked_val);
+    if (dv < bestDv) { bestDv = dv; bestVal = v; }
+  }
+
+  if (bestVal < 0) return;
+
+  S.poly.points.push({ date: draw.DrawDate, val: bestVal });
+  updateLEDs();
+
+  const n = S.poly.points.length;
+  // DEBUG + status: show snapped date and point count
+  const debugInfo = `${draw.DrawDate} val=${bestVal}`;
+  if (n < 4) {
+    document.getElementById('poly-status').textContent = `${n}/4 — last: ${debugInfo}`;
+  } else {
+    S.poly.points.sort((a, b) => a.date < b.date ? -1 : 1);
+    S.poly.coeff = fitCubic(S.poly.points);
+    document.getElementById('poly-status').textContent =
+      (S.poly.coeff ? 'Cubic curve fitted' : 'Fit failed') + ` — last: ${debugInfo}`;
+  }
+
+  render();
+});
+
+
+// ── Boot ──────────────────────────────────────────────────────────
+(async () => {
+  scrollbar.value = S.indexHi;
+  updateScrollLabel(S.indexHi);
+  await fetchDraws();
+  render();
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// FUTURE CORRIDOR
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Next draw date logic ──────────────────────────────────────────
+// Returns YYYY-MM-DD string of the next scheduled draw after lastDate.
+
+function nextDrawDate(lotto, lastDateStr) {
+  const d = new Date(lastDateStr + "T12:00:00");
+  const dow = d.getDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+
+  let addDays = 0;
+
+  if (lotto === "CA" || lotto === "FL") {
+    // Wed(3), Sat(6)
+    const next = { 0:3, 1:2, 2:1, 3:3, 4:2, 5:1, 6:4 };
+    addDays = next[dow];
+  } else if (lotto === "MM") {
+    // Tue(2), Fri(5)
+    const next = { 0:2, 1:1, 2:3, 3:2, 4:1, 5:4, 6:3 };
+    addDays = next[dow];
+  } else if (lotto === "PB" || lotto === "PD") {
+    // Mon(1), Wed(3), Sat(6)
+    const next = { 0:1, 1:2, 2:1, 3:3, 4:2, 5:1, 6:2 };
+    addDays = next[dow];
+  }
+
+  d.setDate(d.getDate() + addDays);
+  return d.toISOString().slice(0, 10);
+}
+
+// ── SAFE forward/backward ordering ───────────────────────────────
+// Operates ONLY on safeMin/safeMax arrays (index 1..6).
+// HOT arrays are passed through completely untouched.
+// Set 6 is excluded from ordering for all types except FL.
+
+function applySafeOrdering(lotto, safeMin, safeMax) {
+  // Work on copies — never mutate HOT
+  const sMin = safeMin.slice();  // index 0 unused; 1..6 live
+  const sMax = safeMax.slice();
+
+  const set6Independent = (lotto !== "FL");
+
+  // Forward pass: sMin[k] >= sMin[k-1] + 1
+  for (let k = 2; k <= 5; k++) {
+    const required = sMin[k - 1] + 1;
+    if (sMin[k] < required) sMin[k] = required;
+  }
+  if (!set6Independent) {
+    const required = sMin[5] + 1;
+    if (sMin[6] < required) sMin[6] = required;
+  }
+
+  // Forward pass: sMax[k] >= sMax[k-1] + 1
+  for (let k = 2; k <= 5; k++) {
+    const required = sMax[k - 1] + 1;
+    if (sMax[k] < required) sMax[k] = required;
+  }
+  if (!set6Independent) {
+    const required = sMax[5] + 1;
+    if (sMax[6] < required) sMax[6] = required;
+  }
+
+  // Backward pass: sMax[k] <= sMax[k+1] - 1
+  for (let k = 4; k >= 1; k--) {
+    const allowed = sMax[k + 1] - 1;
+    if (sMax[k] > allowed) sMax[k] = allowed;
+  }
+  if (!set6Independent) {
+    const allowed = sMax[6] - 1;
+    if (sMax[5] > allowed) sMax[5] = allowed;
+  }
+
+  return { sMin, sMax };
+}
+
+// ── Fetch and display Future Corridor ────────────────────────────
+
+async function openFutureCorridor() {
+  const overlay  = document.getElementById("fc-overlay");
+  const status   = document.getElementById("fc-status");
+  const tbody    = document.getElementById("fc-tbody");
+  const lbl      = document.getElementById("fc-lotto-label");
+  const dateLbl  = document.getElementById("fc-date-label");
+
+  const LOTTO_LABELS = {
+    CA: "California SuperLotto Plus",
+    FL: "Florida Lotto",
+    MM: "Mega Millions",
+    PB: "Powerball",
+    PD: "Powerball Double Play",
+  };
+
+  overlay.style.display = "flex";
+  status.textContent = "Loading…";
+  tbody.innerHTML = "";
+  lbl.textContent = LOTTO_LABELS[S.lotto] || S.lotto;
+  dateLbl.textContent = "";
+
+  // Forecast date = next draw after latest known draw
+  const forecastDate = nextDrawDate(S.lotto, S.latest);
+  dateLbl.textContent = forecastDate;
+
+  // Fetch forecast bands for the latest known draw date
+  // (the most recent row in ForecastPredictions = bands projected for that date)
+  const url = `/api/forecast_chart?lotto=${S.lotto}&cutoff_now=${S.latest}&cutoff_past=${S.latest}`;
+  let rows;
+  try {
+    const r = await fetch(url);
+    rows = await r.json();
+  } catch(e) {
+    status.textContent = "Error loading forecast data.";
+    return;
+  }
+
+  if (!rows || !rows.length) {
+    status.textContent = "No forecast data available.";
+    return;
+  }
+
+  // Build per-set band arrays (index 1..6)
+  const safeMin = new Array(7).fill(0);
+  const safeMax = new Array(7).fill(0);
+  const hotMin  = new Array(7).fill(null);
+  const hotMax  = new Array(7).fill(null);
+  const hasSet  = new Array(7).fill(false);
+
+  for (const row of rows) {
+    const s = row.SetNumber;
+    if (s < 1 || s > 6) continue;
+    safeMin[s] = row.SafeLow;
+    safeMax[s] = row.SafeHigh;
+    hotMin[s]  = row.HotLow  != null ? row.HotLow  : null;
+    hotMax[s]  = row.HotHigh != null ? row.HotHigh : null;
+    hasSet[s]  = true;
+  }
+
+  // Store raw for toggle re-render
+  overlay._safeMin = safeMin.slice();
+  overlay._safeMax = safeMax.slice();
+  overlay._hotMin  = hotMin.slice();
+  overlay._hotMax  = hotMax.slice();
+  overlay._hasSet  = hasSet.slice();
+
+  renderFCGrid(false);
+  status.textContent = "";
+}
+
+function renderFCGrid(applyOrdering) {
+  const overlay = document.getElementById("fc-overlay");
+  const tbody   = document.getElementById("fc-tbody");
+
+  const safeMin = overlay._safeMin.slice();
+  const safeMax = overlay._safeMax.slice();
+  const hotMin  = overlay._hotMin.slice();   // never touched
+  const hotMax  = overlay._hotMax.slice();   // never touched
+  const hasSet  = overlay._hasSet;
+
+  // Apply SAFE ordering if toggled ON — HOT untouched
+  let dispSafeMin = safeMin;
+  let dispSafeMax = safeMax;
+  if (applyOrdering) {
+    const ordered = applySafeOrdering(S.lotto, safeMin, safeMax);
+    dispSafeMin = ordered.sMin;
+    dispSafeMax = ordered.sMax;
+  }
+
+  tbody.innerHTML = "";
+  for (let s = 1; s <= 6; s++) {
+    if (!hasSet[s]) continue;
+    const tr = document.createElement("tr");
+
+    const hotLowCell  = hotMin[s] != null
+      ? `<td class="fc-td-hot">${hotMin[s]}</td>`
+      : `<td class="fc-td-hot-null">—</td>`;
+    const hotHighCell = hotMax[s] != null
+      ? `<td class="fc-td-hot">${hotMax[s]}</td>`
+      : `<td class="fc-td-hot-null">—</td>`;
+
+    tr.innerHTML = `
+      <td class="fc-td-label">Set ${s}</td>
+      <td class="fc-td-safe">${dispSafeMin[s]}</td>
+      <td class="fc-td-safe">${dispSafeMax[s]}</td>
+      ${hotLowCell}
+      ${hotHighCell}
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+// ── Event: open button ────────────────────────────────────────────
+document.getElementById("btn-future-corridor").addEventListener("click", () => {
+  document.getElementById("chk-safe-order").checked = false;
+  openFutureCorridor();
+});
+
+// ── Event: close ──────────────────────────────────────────────────
+const fcOverlay = document.getElementById("fc-overlay");
+document.getElementById("fc-close").addEventListener("click", (e) => {
+  e.stopPropagation();
+  fcOverlay.style.display = "none";
+});
+fcOverlay.addEventListener("click", (e) => {
+  if (e.target === fcOverlay) fcOverlay.style.display = "none";
+});
+
+// ── Event: SAFE ordering toggle ───────────────────────────────────
+// Acceptance test:
+//   OFF → renderFCGrid(false) — raw SAFE values, HOT unchanged
+//   ON  → renderFCGrid(true)  — ordered SAFE values, HOT unchanged
+document.getElementById("chk-safe-order").addEventListener("change", function() {
+  renderFCGrid(this.checked);
+});
+
+</script>
+</body>
+</html>

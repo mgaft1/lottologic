@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gap Patterns — {{ lotto_labels.get(lotto_type, lotto_type) }}</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Arial, sans-serif;
+  background: #1e1e2e; color: #cdd6f4;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+
+/* ── Navbar ── */
+#navbar {
+  background: #181825; border-bottom: 1px solid #313244;
+  padding: 8px 16px; display: flex; align-items: center; gap: 16px; font-size: 0.88rem;
+  flex-shrink: 0;
+}
+#navbar a { color: #89b4fa; text-decoration: none; }
+#navbar a:hover { text-decoration: underline; }
+#navbar select {
+  background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+  padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;
+}
+.nav-logout { margin-left: auto; color: #f38ba8 !important; }
+
+/* ── Main layout ── */
+#main { flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Section headers ── */
+.section-title {
+  font-size: 0.78rem; color: #6c7086; text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 6px;
+}
+
+/* ── Current draw card ── */
+#current-card {
+  background: #181825; border: 1px solid #313244; border-radius: 6px;
+  padding: 12px 16px;
+}
+#current-card .draw-date { font-size: 0.82rem; color: #a6adc8; margin-bottom: 6px; }
+.ball-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ball {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: bold; color: #1e1e2e;
+}
+.gap-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.gap-chip {
+  min-width: 32px; height: 20px; border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.72rem; font-weight: bold; padding: 0 5px;
+}
+.gap-up   { background: #a6e3a1; color: #1e1e2e; }
+.gap-down { background: #f38ba8; color: #1e1e2e; }
+.gap-flat { background: #45475a; color: #cdd6f4; }
+.pos-label { font-size: 0.7rem; color: #6c7086; min-width: 32px; text-align: center; }
+
+/* ── Matches table ── */
+#matches-section { flex: 1; }
+#matches-table {
+  width: 100%; border-collapse: collapse; font-size: 0.82rem;
+}
+#matches-table th {
+  background: #181825; color: #6c7086; font-weight: normal;
+  padding: 6px 10px; text-align: left; border-bottom: 1px solid #313244;
+  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+}
+#matches-table td { padding: 8px 10px; border-bottom: 1px solid #24243a; vertical-align: top; }
+.match-row { cursor: pointer; }
+.match-row:hover td { background: #24243a; }
+.match-row.active td { background: #2a2a3e; }
+.match-row.dimmed { opacity: 0.35; cursor: default; }
+.match-row.dimmed:hover td { background: transparent; }
+
+.strength-badge {
+  display: inline-block; padding: 2px 7px; border-radius: 10px;
+  font-size: 0.72rem; font-weight: bold;
+}
+.s5 { background: #cba6f7; color: #1e1e2e; }
+.s4 { background: #89b4fa; color: #1e1e2e; }
+.s3 { background: #45475a; color: #cdd6f4; }
+
+.pos-tag {
+  display: inline-block; background: #313244; border-radius: 3px;
+  padding: 1px 5px; font-size: 0.7rem; color: #a6adc8; margin: 1px;
+}
+
+/* ── Overlay panel ── */
+#overlay-panel {
+  display: none;
+  background: #181825; border: 1px solid #313244; border-radius: 6px;
+  padding: 14px 16px;
+}
+#overlay-panel.visible { display: block; }
+#overlay-title { font-size: 0.88rem; color: #89b4fa; margin-bottom: 10px; }
+
+.overlay-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+}
+@media (max-width: 700px) {
+  .overlay-grid { grid-template-columns: 1fr; }
+}
+
+.overlay-col { }
+.overlay-col-title {
+  font-size: 0.72rem; color: #6c7086; text-transform: uppercase;
+  letter-spacing: 0.04em; margin-bottom: 6px;
+}
+
+/* projected movement */
+.proj-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.proj-chip {
+  min-width: 38px; padding: 3px 6px; border-radius: 3px; text-align: center;
+  font-size: 0.75rem; font-weight: bold;
+}
+.proj-up   { background: #a6e3a1; color: #1e1e2e; }
+.proj-down { background: #f38ba8; color: #1e1e2e; }
+.proj-flat { background: #45475a; color: #cdd6f4; }
+
+/* projection grid — matches screenshot layout */
+.proj-grid-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 0; border-bottom: 1px solid #24243a;
+}
+.proj-grid-row:last-child { border-bottom: none; }
+.proj-grid-label {
+  font-size: 0.75rem; color: #a6adc8; min-width: 38px;
+}
+.proj-grid-val {
+  min-width: 42px; padding: 3px 10px; border-radius: 3px;
+  font-size: 0.85rem; font-weight: bold; text-align: center;
+}
+.proj-main  { background: #f38ba8; color: #1e1e2e; }
+.proj-bonus { background: #cba6f7; color: #1e1e2e; }
+
+/* ── Set checkboxes toolbar ── */
+#set-toolbar {
+  background: #181825; border-bottom: 1px solid #313244;
+  padding: 6px 16px; display: flex; align-items: center; gap: 12px;
+  font-size: 0.82rem; color: #a6adc8; flex-shrink: 0;
+}
+#set-toolbar label { display:flex; align-items:center; gap:4px; cursor:pointer; }
+#set-toolbar input[type=checkbox] { cursor:pointer; }
+
+/* ── Mini-chart panel ── */
+#minichart-panel {
+  display: none;
+  background: #181825; border: 1px solid #313244; border-radius: 6px;
+  padding: 10px 14px;
+}
+#minichart-panel.visible { display: block; }
+#minichart-title { font-size: 0.78rem; color: #6c7086; margin-bottom: 8px; }
+#minichart-wrap {
+  display: flex; gap: 0; align-items: stretch;
+}
+.mc-canvas-col { flex: 1; }
+.mc-label { font-size: 0.7rem; color: #6c7086; text-align: center; margin-bottom: 3px; }
+#mc-yaxis {
+  width: 32px; flex-shrink: 0;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 4px 0; font-size: 0.65rem; color: #6c7086; text-align: right;
+}
+canvas.mc-canvas {
+  display: block; width: 100%; background: #24243a;
+  border-radius: 4px; border: 1px solid #313244;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Navbar ── -->
+<div id="navbar">
+  <a href="/home">Home</a>
+  <a href="/">Viewer</a>
+  <span style="color:#45475a;">|</span>
+  <span style="color:#a6adc8;">Gaps:</span>
+  <select id="sel-lotto">
+    {% for lt in lotto_types %}
+    <option value="{{ lt }}" {% if lt == lotto_type %}selected{% endif %}>
+      {{ lotto_labels.get(lt, lt) }}
+    </option>
+    {% endfor %}
+  </select>
+  <a href="/logout" class="nav-logout">Sign out</a>
+</div>
+
+<!-- ── Set checkboxes ── -->
+<div id="set-toolbar">
+  <span>Sets:</span>
+  <label><input type="checkbox" class="chk-set" value="1" checked> <span style="color:#89b4fa;">One</span></label>
+  <label><input type="checkbox" class="chk-set" value="2" checked> <span style="color:#a6e3a1;">Two</span></label>
+  <label><input type="checkbox" class="chk-set" value="3" checked> <span style="color:#fab387;">Three</span></label>
+  <label><input type="checkbox" class="chk-set" value="4" checked> <span style="color:#f9e2af;">Four</span></label>
+  <label><input type="checkbox" class="chk-set" value="5" checked> <span style="color:#cba6f7;">Five</span></label>
+  <label><input type="checkbox" class="chk-set" value="6" checked> <span style="color:#f38ba8;">Six</span></label>
+</div>
+<div id="main">
+
+  <!-- Current draw -->
+  <div id="current-card">
+    <div class="section-title">Current draw</div>
+    <div class="draw-date" id="curr-date">—</div>
+    <div class="ball-row" id="curr-balls"></div>
+    <div style="margin-top:8px;">
+      <div class="section-title">Gap from previous draw</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;" id="curr-gap-row"></div>
+    </div>
+  </div>
+
+  <!-- Matches -->
+  <div id="matches-section">
+    <div class="section-title">Historical gap matches</div>
+    <div id="loading">Loading…</div>
+    <div id="no-matches" style="display:none;">No matches found for this lotto type.</div>
+    <table id="matches-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Anchor draw</th>
+          <th>Date</th>
+          <th>Strength</th>
+          <th>Matched positions</th>
+          <th>Anchor numbers</th>
+        </tr>
+      </thead>
+      <tbody id="matches-body"></tbody>
+    </table>
+  </div>
+
+  <!-- Overlay panel -->
+  <div id="overlay-panel">
+    <div id="overlay-title"></div>
+    <div class="overlay-grid">
+      <div class="overlay-col">
+        <div class="overlay-col-title">Historical anchor draw</div>
+        <div class="ball-row" id="ov-anchor-balls"></div>
+        <div class="section-title" style="margin-top:8px;">Gap direction</div>
+        <div class="gap-row" id="ov-anchor-gap"></div>
+      </div>
+      <div class="overlay-col">
+        <div class="overlay-col-title">What happened next</div>
+        <div class="ball-row" id="ov-next-balls"></div>
+        <div class="section-title" style="margin-top:8px;">Movement</div>
+        <div class="gap-row" id="ov-next-delta"></div>
+      </div>
+      <div class="overlay-col">
+        <div class="overlay-col-title">Projected future draw</div>
+        <div id="ov-proj-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mini-chart panel (appears when a match is clicked) -->
+  <div id="minichart-panel">
+    <div id="minichart-title"></div>
+    <div id="minichart-wrap">
+      <div class="mc-canvas-col">
+        <div class="mc-label" id="mc-label-hist">Historical context</div>
+        <canvas class="mc-canvas" id="mc-hist" height="220"></canvas>
+        <div id="mc-xaxis-hist" style="display:flex;justify-content:space-between;font-size:0.6rem;color:#6c7086;margin-top:2px;padding:0 2px;"></div>
+      </div>
+      <div id="mc-yaxis"></div>
+      <div class="mc-canvas-col">
+        <div class="mc-label" id="mc-label-curr">Current context</div>
+        <canvas class="mc-canvas" id="mc-curr" height="220"></canvas>
+        <div id="mc-xaxis-curr" style="display:flex;justify-content:space-between;font-size:0.6rem;color:#6c7086;margin-top:2px;padding:0 2px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+"use strict";
+
+const SET_COLORS = ["#89b4fa","#a6e3a1","#fab387","#f9e2af","#cba6f7","#f38ba8"];
+let S = {
+  lotto:   "{{ lotto_type }}",
+  matches: [],
+  draws:   [],   // raw draws from /api/draws (last few)
+  active:  null, // currently selected match index
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function makeBall(val, colorIdx) {
+  const b = document.createElement("div");
+  b.className = "ball";
+  b.style.background = SET_COLORS[colorIdx % 6];
+  b.textContent = val != null ? val : "?";
+  return b;
+}
+
+function gapClass(v) {
+  if (v > 0) return "gap-up";
+  if (v < 0) return "gap-down";
+  return "gap-flat";
+}
+
+function gapLabel(v) {
+  if (v > 0) return "▲";
+  if (v < 0) return "▼";
+  return "—";
+}
+
+function makeGapChip(v) {
+  const c = document.createElement("div");
+  c.className = "gap-chip " + gapClass(v);
+  c.textContent = gapLabel(v);
+  return c;
+}
+
+function makeDeltaChip(v) {
+  const c = document.createElement("div");
+  c.className = "proj-chip " + (v > 0 ? "proj-up" : v < 0 ? "proj-down" : "proj-flat");
+  c.textContent = (v > 0 ? "+" : "") + v;
+  return c;
+}
+
+// ── Render current draw ───────────────────────────────────────────────────────
+
+function renderCurrent(draws) {
+  if (!draws.length) return;
+  const curr = draws[draws.length - 1];
+  const prev = draws.length > 1 ? draws[draws.length - 2] : null;
+
+  document.getElementById("curr-date").textContent =
+    `Draw #${curr.DrawIndex}  —  ${curr.DrawDate}`;
+
+  const ballRow = document.getElementById("curr-balls");
+  ballRow.innerHTML = "";
+  for (let s = 1; s <= 6; s++) {
+    const v = curr[`Nbr${s}`];
+    if (v != null) ballRow.appendChild(makeBall(v, s - 1));
+  }
+
+  const gapRow = document.getElementById("curr-gap-row");
+  gapRow.innerHTML = "";
+  if (prev) {
+    for (let s = 1; s <= 5; s++) {
+      const wrap = document.createElement("div");
+      wrap.style.display = "flex";
+      wrap.style.flexDirection = "column";
+      wrap.style.alignItems = "center";
+      wrap.style.gap = "2px";
+      const lbl = document.createElement("div");
+      lbl.className = "pos-label";
+      lbl.textContent = `P${s}`;
+      wrap.appendChild(lbl);
+      wrap.appendChild(makeGapChip(curr[`Nbr${s}`] - prev[`Nbr${s}`]));
+      gapRow.appendChild(wrap);
+    }
+  } else {
+    gapRow.textContent = "—";
+  }
+}
+
+// ── Render matches table ──────────────────────────────────────────────────────
+
+function renderTable(matches) {
+  const loading  = document.getElementById("loading");
+  const noMatch  = document.getElementById("no-matches");
+  const table    = document.getElementById("matches-table");
+  const tbody    = document.getElementById("matches-body");
+
+  loading.style.display = "none";
+  tbody.innerHTML = "";
+
+  if (!matches.length) {
+    noMatch.style.display = "block";
+    table.style.display   = "none";
+    return;
+  }
+
+  noMatch.style.display = "none";
+  table.style.display   = "table";
+
+  matches.forEach((m, i) => {
+    const clickable = i < 3;
+    const tr = document.createElement("tr");
+    tr.className = "match-row" + (clickable ? "" : " dimmed");
+    tr.dataset.idx = i;
+
+    // strength badge
+    const sc = m.match_strength >= 5 ? "s5" : m.match_strength >= 4 ? "s4" : "s3";
+
+    // positions tags
+    const posTags = m.matched_positions
+      .map(p => `<span class="pos-tag">P${p}</span>`).join(" ");
+
+    // anchor numbers
+    const anchorNums = [1,2,3,4,5].map(s =>
+      `<span style="color:${SET_COLORS[s-1]};font-weight:bold;">${m.anchor_draw[`Nbr${s}`] ?? "?"}</span>`
+    ).join(" · ");
+
+    tr.innerHTML = `
+      <td style="color:#6c7086;">${i + 1}</td>
+      <td style="font-weight:bold;">#${m.anchor_index}</td>
+      <td style="color:#a6adc8;">${m.anchor_date}</td>
+      <td><span class="strength-badge ${sc}">${m.match_strength}-gap</span></td>
+      <td>${posTags}</td>
+      <td style="font-size:0.78rem;">${anchorNums}</td>
+    `;
+
+    if (clickable) {
+      tr.addEventListener("click", () => selectMatch(i));
+    }
+
+    tbody.appendChild(tr);
+  });
+}
+
+// ── Game limits per lotto type ────────────────────────────────────────────────
+// main = sets 1-5,  bonus = set 6
+const GAME_LIMITS = {
+  CA: { mainMin:1, mainMax:47, bonusMin:1, bonusMax:27 },
+  FL: { mainMin:1, mainMax:53, bonusMin:1, bonusMax:53 },
+  MM: { mainMin:1, mainMax:70, bonusMin:1, bonusMax:25 },
+  PB: { mainMin:1, mainMax:69, bonusMin:1, bonusMax:26 },
+  PD: { mainMin:1, mainMax:69, bonusMin:1, bonusMax:26 },
+};
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ── Compute projection for one match ─────────────────────────────────────────
+// Step 1: delta = next_draw[s] - anchor_draw[s]
+// Step 2: projected = current_draw[s] + delta
+// Step 3: clamp to game limits
+// Step 4: sort sets 1-5 ascending; set 6 untouched
+function computeProjection(m, currentDraw) {
+  const lim = GAME_LIMITS[S.lotto] || GAME_LIMITS.CA;
+
+  // Steps 1 + 2: delta and raw projection
+  const raw = {};
+  for (let s = 1; s <= 6; s++) {
+    const delta = m.next_draw[`Nbr${s}`] - m.anchor_draw[`Nbr${s}`];
+    const curr  = currentDraw[`Nbr${s}`];
+    if (curr == null) { raw[s] = null; continue; }
+    raw[s] = curr + delta;
+  }
+
+  // Step 3: clamp
+  const clamped = {};
+  for (let s = 1; s <= 5; s++) {
+    if (raw[s] == null) { clamped[s] = null; continue; }
+    clamped[s] = clamp(raw[s], lim.mainMin, lim.mainMax);
+  }
+  // Set 6 (bonus)
+  if (raw[6] != null) {
+    clamped[6] = clamp(raw[6], lim.bonusMin, lim.bonusMax);
+  } else {
+    clamped[6] = null;
+  }
+
+  // Step 4: sort sets 1-5 ascending; set 6 independent
+  const mainVals = [1,2,3,4,5]
+    .map(s => clamped[s])
+    .filter(v => v != null)
+    .sort((a, b) => a - b);
+
+  const projected = {};
+  for (let i = 0; i < 5; i++) projected[i + 1] = mainVals[i] ?? null;
+  projected[6] = clamped[6];
+
+  return projected;
+}
+
+// ── Select match → show overlay ──────────────────────────────────────────────
+
+function selectMatch(idx) {
+  // Toggle off if already active
+  if (S.active === idx) {
+    S.active = null;
+    document.querySelectorAll(".match-row").forEach(r => r.classList.remove("active"));
+    document.getElementById("overlay-panel").classList.remove("visible");
+    document.getElementById("minichart-panel").classList.remove("visible");
+    return;
+  }
+
+  S.active = idx;
+  document.querySelectorAll(".match-row").forEach(r => r.classList.remove("active"));
+  const rows = document.querySelectorAll(".match-row:not(.dimmed)");
+  if (rows[idx]) rows[idx].classList.add("active");
+
+  const m = S.matches[idx];
+  if (!S.draws.length) return;
+  const currentDraw = S.draws[S.draws.length - 1];
+
+  const panel = document.getElementById("overlay-panel");
+  panel.classList.add("visible");
+
+  document.getElementById("overlay-title").textContent =
+    `Match #${idx + 1} — Anchor draw #${m.anchor_index} (${m.anchor_date})`;
+
+  // Anchor balls
+  const anchorBalls = document.getElementById("ov-anchor-balls");
+  anchorBalls.innerHTML = "";
+  for (let s = 1; s <= 6; s++) {
+    const v = m.anchor_draw[`Nbr${s}`];
+    if (v != null) anchorBalls.appendChild(makeBall(v, s - 1));
+  }
+
+  // Anchor gap direction (sets 1-5)
+  const anchorGap = document.getElementById("ov-anchor-gap");
+  anchorGap.innerHTML = "";
+  m.gap_vector.forEach((v, i) => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;";
+    const lbl = document.createElement("div");
+    lbl.className = "pos-label";
+    lbl.textContent = `P${i + 1}`;
+    wrap.appendChild(lbl);
+    wrap.appendChild(makeGapChip(v));
+    anchorGap.appendChild(wrap);
+  });
+
+  // Next draw balls
+  const nextBalls = document.getElementById("ov-next-balls");
+  nextBalls.innerHTML = "";
+  for (let s = 1; s <= 6; s++) {
+    const v = m.next_draw[`Nbr${s}`];
+    if (v != null) nextBalls.appendChild(makeBall(v, s - 1));
+  }
+
+  // Next delta chips (sets 1-5)
+  const nextDelta = document.getElementById("ov-next-delta");
+  nextDelta.innerHTML = "";
+  for (let s = 1; s <= 5; s++) {
+    const v = m.next_delta[`Nbr${s}`];
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;";
+    const lbl = document.createElement("div");
+    lbl.className = "pos-label";
+    lbl.textContent = `P${s}`;
+    wrap.appendChild(lbl);
+    wrap.appendChild(makeDeltaChip(v));
+    nextDelta.appendChild(wrap);
+  }
+
+  // Projected values — full logic: delta → clamp → sort
+  const projected = computeProjection(m, currentDraw);
+
+  // Render projection grid (sets 1-6, matching screenshot layout)
+  const projGrid = document.getElementById("ov-proj-grid");
+  projGrid.innerHTML = "";
+
+  const setLabels = ["Set 1","Set 2","Set 3","Set 4","Set 5","Set 6"];
+  for (let s = 1; s <= 6; s++) {
+    const v = projected[s];
+    if (v == null) continue;
+    const row = document.createElement("div");
+    row.className = "proj-grid-row";
+    row.innerHTML = `
+      <span class="proj-grid-label">${setLabels[s-1]}</span>
+      <span class="proj-grid-val ${s === 6 ? 'proj-bonus' : 'proj-main'}">${v}</span>
+    `;
+    projGrid.appendChild(row);
+  }
+
+  // Draw mini-charts
+  renderMiniCharts(idx);
+}
+
+// ── Load data ─────────────────────────────────────────────────────────────────
+
+async function load() {
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("matches-table").style.display = "none";
+  document.getElementById("no-matches").style.display = "none";
+  document.getElementById("overlay-panel").classList.remove("visible");
+  document.getElementById("minichart-panel").classList.remove("visible");
+  S.active = null;
+
+  // Fetch last few draws for current draw display
+  const today = new Date().toISOString().slice(0, 10);
+  const past  = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+  const dr = await fetch(`/api/draws?lotto=${S.lotto}&cutoff_now=${today}&cutoff_past=${past}`);
+  S.draws = await dr.json();
+  renderCurrent(S.draws);
+
+  // Fetch gap matches
+  const mr = await fetch(`/api/gaps?lotto=${S.lotto}`);
+  S.matches = await mr.json();
+  renderTable(S.matches);
+}
+
+// ── Lotto selector ────────────────────────────────────────────────────────────
+
+document.getElementById("sel-lotto").addEventListener("change", function() {
+  S.lotto = this.value;
+  window.history.replaceState({}, "", `/gaps?lotto=${S.lotto}`);
+  load();
+});
+
+// ── Visible sets ─────────────────────────────────────────────────────────────
+
+function getVisibleSets() {
+  return Array.from(document.querySelectorAll(".chk-set:checked"))
+    .map(cb => parseInt(cb.value));
+}
+
+document.querySelectorAll(".chk-set").forEach(cb => {
+  cb.addEventListener("change", () => {
+    if (S.active !== null) renderMiniCharts(S.active);
+  });
+});
+
+// ── Mini-chart drawing ────────────────────────────────────────────────────────
+
+const PAD = { top: 10, right: 6, bottom: 6, left: 6 };
+const CANVAS_H = 220;
+
+function getVal(draw, s) {
+  const v = draw[`Nbr${s}`];
+  return (v != null) ? v : null;
+}
+
+// Compute shared Y scale across both contexts for all visible sets
+function computeScale(histDraws, currDraws, visibleSets, projectedVals) {
+  let minV = Infinity, maxV = -Infinity;
+  for (const draws of [histDraws, currDraws]) {
+    for (const d of draws) {
+      for (const s of visibleSets) {
+        const v = getVal(d, s);
+        if (v != null) { minV = Math.min(minV, v); maxV = Math.max(maxV, v); }
+      }
+    }
+  }
+  // Include projected values in scale
+  if (projectedVals) {
+    for (const s of visibleSets) {
+      const v = projectedVals[s];
+      if (v != null) { minV = Math.min(minV, v); maxV = Math.max(maxV, v); }
+    }
+  }
+  if (!isFinite(minV)) { minV = 1; maxV = 10; }
+  minV = Math.max(1, minV - 1);
+  maxV = maxV + 1;
+  return { minV, maxV };
+}
+
+function yPx(v, minV, maxV, h) {
+  const plotH = h - PAD.top - PAD.bottom;
+  return PAD.top + plotH * (1 - (v - minV) / (maxV - minV));
+}
+
+function xPx(i, total, w) {
+  const plotW = w - PAD.left - PAD.right;
+  return PAD.left + (total <= 1 ? plotW / 2 : (i / (total - 1)) * plotW);
+}
+
+function drawMiniCanvas(canvasEl, draws, visibleSets, scale, blackFrom, blackTo) {
+  // Resize to actual pixel width
+  const rect = canvasEl.getBoundingClientRect();
+  const w = rect.width || canvasEl.offsetWidth || 300;
+  canvasEl.width  = w;
+  canvasEl.height = CANVAS_H;
+
+  const ctx = canvasEl.getContext("2d");
+  const { minV, maxV } = scale;
+  const n = draws.length;
+
+  // Background grid
+  ctx.fillStyle = "#24243a";
+  ctx.fillRect(0, 0, w, CANVAS_H);
+  ctx.strokeStyle = "#313244";
+  ctx.lineWidth = 0.5;
+  const gridLines = 6;
+  for (let g = 0; g <= gridLines; g++) {
+    const y = PAD.top + ((CANVAS_H - PAD.top - PAD.bottom) / gridLines) * g;
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(w - PAD.right, y); ctx.stroke();
+  }
+  for (let g = 0; g < n; g++) {
+    const x = xPx(g, n, w);
+    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, CANVAS_H - PAD.bottom); ctx.stroke();
+  }
+
+  // Draw each visible set as colored line
+  for (const s of visibleSets) {
+    const color = SET_COLORS[s - 1];
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < n; i++) {
+      const v = getVal(draws[i], s);
+      if (v == null) { started = false; continue; }
+      const x = xPx(i, n, w);
+      const y = yPx(v, minV, maxV, CANVAS_H);
+      if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Dots
+    ctx.fillStyle = color;
+    for (let i = 0; i < n; i++) {
+      const v = getVal(draws[i], s);
+      if (v == null) continue;
+      const x = xPx(i, n, w);
+      const y = yPx(v, minV, maxV, CANVAS_H);
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // Black overlay segment: blackFrom..blackTo indices
+  if (blackFrom != null && blackTo != null && blackFrom < n && blackTo < n) {
+    for (const s of visibleSets) {
+      const vA = getVal(draws[blackFrom], s);
+      const vB = getVal(draws[blackTo],   s);
+      if (vA == null || vB == null) continue;
+      const x1 = xPx(blackFrom, n, w);
+      const y1 = yPx(vA, minV, maxV, CANVAS_H);
+      const x2 = xPx(blackTo,   n, w);
+      const y2 = yPx(vB, minV, maxV, CANVAS_H);
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+  }
+}
+
+function drawYAxis(minV, maxV) {
+  const el = document.getElementById("mc-yaxis");
+  el.innerHTML = "";
+  const steps = 6;
+  for (let i = steps; i >= 0; i--) {
+    const v = Math.round(minV + ((maxV - minV) / steps) * i);
+    const span = document.createElement("span");
+    span.textContent = v;
+    el.appendChild(span);
+  }
+}
+
+function drawXAxis(elId, draws) {
+  const el = document.getElementById(elId);
+  el.innerHTML = "";
+  for (const d of draws) {
+    const span = document.createElement("span");
+    // Show MM/DD/YY
+    const parts = d.DrawDate.split("-");
+    span.textContent = parts[1] + "/" + parts[2] + "/" + parts[0].slice(2);
+    el.appendChild(span);
+  }
+}
+
+function renderMiniCharts(idx) {
+  const m = S.matches[idx];
+  if (!m) return;
+
+  const visibleSets = getVisibleSets();
+  if (!visibleSets.length) return;
+
+  const histDraws = m.hist_context;
+  const currDraws = m.curr_context;
+
+  // Anchor is second-to-last in hist_context (last is the "next" draw)
+  const histAnchorIdx = histDraws.length - 2;
+  const histNextIdx   = histDraws.length - 1;
+
+  // Current draw is last in curr_context; projected goes one step further
+  // We represent projected as a synthetic draw appended to currDraws
+  const currentDraw  = currDraws[currDraws.length - 1];
+  const projected    = computeProjection(m, currentDraw);
+
+  // Build projected draw object for scale calculation
+  const projDraw = { DrawDate: "projected", DrawIndex: -1 };
+  for (let s = 1; s <= 6; s++) projDraw[`Nbr${s}`] = projected[s] ?? null;
+
+  const currWithProj = [...currDraws, projDraw];
+  const currBlackFrom = currDraws.length - 1;  // current draw
+  const currBlackTo   = currDraws.length;       // projected
+
+  const scale = computeScale(histDraws, currWithProj, visibleSets, projected);
+
+  // Panel visible
+  const panel = document.getElementById("minichart-panel");
+  panel.classList.add("visible");
+  document.getElementById("minichart-title").textContent =
+    `Set context — Anchor #${m.anchor_index} (${m.anchor_date})`;
+
+  // Draw after layout settles
+  requestAnimationFrame(() => {
+    drawMiniCanvas(
+      document.getElementById("mc-hist"),
+      histDraws, visibleSets, scale, histAnchorIdx, histNextIdx
+    );
+    drawMiniCanvas(
+      document.getElementById("mc-curr"),
+      currWithProj, visibleSets, scale, currBlackFrom, currBlackTo
+    );
+    drawYAxis(scale.minV, scale.maxV);
+    drawXAxis("mc-xaxis-hist", histDraws);
+    drawXAxis("mc-xaxis-curr", currWithProj);
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+load();
+</script>
+</body>
+</html>

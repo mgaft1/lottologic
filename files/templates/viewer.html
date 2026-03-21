@@ -7,36 +7,36 @@
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: Arial, sans-serif; background: #1e1e2e; color: #cdd6f4;
+  font-family: Arial, sans-serif; background: #ffffff; color: #1a1a2e;
   height: 100vh; display: flex; flex-direction: column; overflow: hidden;
 }
 
 /* ── Top bar ── */
 #topbar {
-  background: #181825; border-bottom: 1px solid #313244;
+  background: #f0f0f0; border-bottom: 1px solid #cccccc;
   padding: 6px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  flex-shrink: 0; font-size: 0.85rem;
+  flex-shrink: 0; font-size: 1.15rem;
 }
-#topbar select { background:#313244; color:#cdd6f4; border:1px solid #45475a;
+#topbar select { background:#ffffff; color:#1a1a2e; border:1px solid #aaaaaa;
   padding:4px 8px; border-radius:4px; cursor:pointer; }
-#topbar button { background:#313244; color:#cdd6f4; border:1px solid #45475a;
+#topbar button { background:#e0e0e0; color:#1a1a2e; border:1px solid #aaaaaa;
   padding:4px 10px; border-radius:4px; cursor:pointer; }
-#topbar button:hover  { background:#45475a; }
-#topbar button.active { background:#89b4fa; color:#1e1e2e; border-color:#89b4fa; }
-.sep { color:#45475a; padding:0 2px; }
-#window-info { color:#6c7086; font-size:0.78rem; margin-left:4px; }
+#topbar button:hover  { background:#cccccc; }
+#topbar button.active { background:#4488ff; color:#ffffff; border-color:#4488ff; }
+.sep { color:#aaaaaa; padding:0 2px; }
+#window-info { color:#666666; font-size:0.78rem; margin-left:4px; }
 
 /* ── Canvas area ── */
-#canvas-wrap { flex:1; position:relative; overflow:hidden; padding:8px 12px 0 12px; }
-#plot-canvas { display:block; width:100%; height:100%; cursor:crosshair; }
+#canvas-wrap { flex:1; position:relative; overflow:hidden; padding:8px 12px 0 12px; background:#ffffff; }
+#plot-canvas { display:block; width:100%; height:100%; cursor:default; }
 
 /* ── Scrollbar row ── */
 #scrollbar-row {
   flex-shrink:0; padding:4px 12px 2px 12px;
-  display:flex; align-items:center; gap:8px;
+  display:flex; align-items:center; gap:8px; background:#f0f0f0;
 }
 #scrollbar { flex:1; accent-color:#89b4fa; height:6px; }
-#scroll-label { font-size:0.78rem; color:#a6adc8; min-width:240px; text-align:right; }
+#scroll-label { font-size:0.78rem; color:#555555; min-width:240px; text-align:right; }
 
 /* ── Curve toolbar ── */
 #curve-toolbar {
@@ -51,18 +51,18 @@ body {
 
 /* ── Dataset toolbar ── */
 #dataset-toolbar {
-  flex-shrink:0; background:#181825; border-top:1px solid #313244;
+  flex-shrink:0; background:#f0f0f0; border-top:1px solid #cccccc;
   padding:4px 12px; display:flex; align-items:center; gap:12px; font-size:0.8rem;
 }
 .ds-check-wrap { display:flex; align-items:center; gap:4px; cursor:pointer; }
 .ds-check-wrap input[type=checkbox] { width:13px; height:13px; cursor:pointer; accent-color:var(--ds-color); }
 .ds-check-wrap span { color:var(--ds-color); font-size:0.78rem; }
 #btn-redraw {
-  background:#89b4fa; color:#1e1e2e; border:none;
+  background:#4488ff; color:#ffffff; border:none;
   padding:3px 14px; border-radius:4px; cursor:pointer; font-size:0.8rem; font-weight:bold;
   margin-left:6px;
 }
-#btn-redraw:hover { background:#b4d0f7; }
+#btn-redraw:hover { background:#2266dd; }
 
 /* ── Dataset fade when curve/poly active ── */
 #plot-canvas.mode-curve  { cursor: crosshair; }
@@ -72,10 +72,10 @@ body {
 
 /* ── Polynomial toolbar ── */
 #poly-toolbar {
-  flex-shrink:0; background:#181825; border-top:1px solid #313244;
+  flex-shrink:0; background:#f0f0f0; border-top:1px solid #cccccc;
   padding:4px 12px; display:flex; align-items:center; gap:10px; font-size:0.8rem;
 }
-#poly-toolbar label { color:#a6adc8; }
+#poly-toolbar label { color:#333333; }
 #chk-poly { width:14px; height:14px; cursor:pointer; accent-color:#f38ba8; }
 .led {
   width:10px; height:10px; border-radius:50%; display:inline-block;
@@ -87,12 +87,12 @@ body {
   padding:3px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;
 }
 #poly-clear-btn:hover { background:#45475a; }
-#poly-status { color:#6c7086; font-size:0.75rem; margin-left:4px; }
+#poly-status { color:#555555; font-size:0.75rem; margin-left:4px; }
 
 /* ── Bands toolbar ── */
 #bands-toolbar {
-  flex-shrink:0; background:#181825; border-top:1px solid #313244;
-  padding:4px 12px; display:flex; align-items:center; gap:10px; font-size:0.8rem; color:#a6adc8;
+  flex-shrink:0; background:#f0f0f0; border-top:1px solid #cccccc;
+  padding:4px 12px; display:flex; align-items:center; gap:10px; font-size:0.8rem; color:#333333;
 }
 #chk-bands { width:14px; height:14px; cursor:pointer; accent-color:#2dd4bf; }
 
@@ -148,8 +148,8 @@ body {
 
 /* ── Status bar ── */
 #statusbar {
-  flex-shrink:0; background:#181825; border-top:1px solid #313244;
-  padding:3px 12px; font-size:0.78rem; color:#a6adc8;
+  flex-shrink:0; background:#f0f0f0; border-top:1px solid #cccccc;
+  padding:3px 12px; font-size:0.78rem; color:#333333;
   display:flex; gap:20px; align-items:center;
 }
 
@@ -163,6 +163,11 @@ body {
 #inspect-box .ib-date  { color:#89b4fa; font-weight:bold; margin-bottom:4px; }
 #inspect-box .ib-idx   { color:#a6adc8; font-size:0.75rem; margin-bottom:6px; }
 #inspect-box .ib-balls { display:flex; flex-wrap:wrap; gap:5px; }
+.wins-ball {
+  width:26px; height:26px; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:0.78rem; font-weight:bold; color:#fff;
+}
 .ball {
   width:28px; height:28px; border-radius:50%;
   display:inline-flex; align-items:center; justify-content:center;
@@ -174,6 +179,17 @@ body {
 
 <!-- ── Top bar ── -->
 <div id="topbar">
+  <!-- 1. Home -->
+  <a href="/home" style="color:#ffffff;font-size:1.15rem;text-decoration:none;padding:4px 10px;background:#4488ff;border:1px solid #2266dd;border-radius:4px;font-weight:bold;">Home</a>
+
+  <span class="sep">|</span>
+
+  <!-- 2. Draw button -->
+  <button id="btn-redraw">Draw</button>
+
+  <span class="sep">|</span>
+
+  <!-- 3. Lotto type dropdown -->
   <select id="sel-lotto">
     {% for lt in lotto_types %}
     <option value="{{ lt }}" {% if lt == lotto_type %}selected{% endif %}>
@@ -182,24 +198,52 @@ body {
     {% endfor %}
   </select>
 
-  <a href="/home" style="color:#89b4fa;font-size:0.85rem;text-decoration:none;padding:4px 8px;background:#313244;border:1px solid #45475a;border-radius:4px;">Home</a>
+  <span class="sep">|</span>
+
+  <!-- 4. Set checkboxes -->
+  <label class="ds-check-wrap" style="--ds-color:#8a2be2"><input type="checkbox" id="chk-1" checked><span>Nbr1</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#ff4500"><input type="checkbox" id="chk-2" checked><span>Nbr2</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#000080"><input type="checkbox" id="chk-3" checked><span>Nbr3</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#006400"><input type="checkbox" id="chk-4" checked><span>Nbr4</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#4b0082"><input type="checkbox" id="chk-5" checked><span>Nbr5</span></label>
+  <label class="ds-check-wrap" style="--ds-color:#a52a2a"><input type="checkbox" id="chk-6" checked><span>{% if lotto_type == 'FL' %}Nbr6{% elif lotto_type in ('CA', 'MM') %}Mega{% elif lotto_type == 'PB' %}PB{% elif lotto_type == 'PD' %}DP{% else %}Nbr6 (bonus){% endif %}</span></label>
 
   <span class="sep">|</span>
 
+  <!-- 5. Days buttons -->
   {% for d in window_days %}
   <button class="btn-days {% if d == days %}active{% endif %}" data-days="{{ d }}">{{ d }}</button>
   {% endfor %}
 
   <span class="sep">|</span>
 
+  <!-- 6. Navigation -->
   <button id="btn-start">⏮ Start</button>
   <button id="btn-left">◀ Left</button>
   <button id="btn-right">Right ▶</button>
   <button id="btn-end">End ⏭</button>
 
   <span class="sep">|</span>
+
+  <!-- 7. Cubic fit -->
+  <input type="checkbox" id="chk-poly">
+  <label for="chk-poly">Cubic fit:</label>
+  <span class="led" id="led-1"></span>
+  <span class="led" id="led-2"></span>
+  <span class="led" id="led-3"></span>
+  <span class="led" id="led-4"></span>
+  <span id="poly-pt-count" style="color:#cc0000;font-size:0.75rem;min-width:52px;"></span>
+  <button id="poly-clear-btn">Clear</button>
+  <span id="poly-status" style="color:#888888;font-size:0.75rem;">Check to begin selecting 4 points</span>
+
+  <span class="sep">|</span>
+
+  <!-- 8. Future Corridor -->
   <button id="btn-future-corridor">Future Corridor</button>
 
+  <span class="sep">|</span>
+  <span id="wins-date" style="font-size:1.0rem;font-weight:bold;color:#555555;min-width:90px;"></span>
+  <div id="wins-balls" style="display:flex;gap:5px;align-items:center;"></div>
   <span id="window-info"></span>
 </div>
 
@@ -215,11 +259,11 @@ body {
 
 <!-- ── Scrollbar ── -->
 <div id="scrollbar-row">
-  <span style="font-size:0.75rem;color:#6c7086;">{{ index_lo }}</span>
+  <span style="font-size:0.75rem;color:#555555;">{{ index_lo }}</span>
   <input type="range" id="scrollbar"
          min="{{ index_lo }}" max="{{ index_hi }}"
          value="{{ index_hi }}">
-  <span style="font-size:0.75rem;color:#6c7086;">{{ index_hi }}</span>
+  <span style="font-size:0.75rem;color:#555555;">{{ index_hi }}</span>
   <span id="scroll-label"></span>
 </div>
 
@@ -238,30 +282,9 @@ body {
   </span>
 </div>
 
-<!-- ── Dataset toolbar ── -->
-<div id="dataset-toolbar">
-  <span style="color:#6c7086;font-size:0.78rem;">Datasets:</span>
-  <label class="ds-check-wrap" style="--ds-color:#89b4fa"><input type="checkbox" id="chk-1" checked><span>Nbr1</span></label>
-  <label class="ds-check-wrap" style="--ds-color:#a6e3a1"><input type="checkbox" id="chk-2" checked><span>Nbr2</span></label>
-  <label class="ds-check-wrap" style="--ds-color:#fab387"><input type="checkbox" id="chk-3" checked><span>Nbr3</span></label>
-  <label class="ds-check-wrap" style="--ds-color:#f9e2af"><input type="checkbox" id="chk-4" checked><span>Nbr4</span></label>
-  <label class="ds-check-wrap" style="--ds-color:#cba6f7"><input type="checkbox" id="chk-5" checked><span>Nbr5</span></label>
-  <label class="ds-check-wrap" style="--ds-color:#f38ba8"><input type="checkbox" id="chk-6" checked><span>{% if lotto_type == 'FL' %}Nbr6{% elif lotto_type in ('CA', 'MM') %}Mega{% elif lotto_type == 'PB' %}PB{% elif lotto_type == 'PD' %}DP{% else %}Nbr6 (bonus){% endif %}</span></label>
-  <button id="btn-redraw">Redraw</button>
-</div>
-
-<!-- ── Polynomial toolbar ── -->
-<div id="poly-toolbar">
-  <input type="checkbox" id="chk-poly">
-  <label for="chk-poly">Cubic fit:</label>
-  <span class="led" id="led-1"></span>
-  <span class="led" id="led-2"></span>
-  <span class="led" id="led-3"></span>
-  <span class="led" id="led-4"></span>
-  <span id="poly-pt-count" style="color:#f38ba8;font-size:0.75rem;min-width:52px;"></span>
-  <button id="poly-clear-btn">Clear</button>
-  <span id="poly-status">Check to begin selecting 4 points</span>
-</div>
+<!-- ── Hidden placeholder divs (JS references these IDs) ── -->
+<div id="dataset-toolbar" style="display:none;"></div>
+<div id="poly-toolbar" style="display:none;"></div>
 
 <!-- ── Bands toolbar (visible only when exactly 1 set is checked) ── -->
 <div id="bands-toolbar" style="display:none;">
@@ -363,7 +386,7 @@ const statusHov = document.getElementById("status-hover");
 const inspBox   = document.getElementById("inspect-box");
 
 // ── Per-set colours ───────────────────────────────────────────────
-const SET_COLORS = ["#89b4fa","#a6e3a1","#fab387","#f9e2af","#cba6f7","#f38ba8"];
+const SET_COLORS = ["#8a2be2","#ff4500","#000080","#006400","#4b0082","#a52a2a"];
 
 // ── Fetch draws for current window ───────────────────────────────
 async function fetchDraws() {
@@ -466,6 +489,7 @@ function render() {
   }
   const padV = Math.max(2, Math.round((maxV - minV) * 0.05));
   minV -= padV; maxV += padV;
+  if (minV < 1) minV = 1;  // lotto numbers never go below 1
   // Keep in sync so click handler uses identical Y mapping
   S.poly.minV = minV; S.poly.maxV = maxV;
   // Cache exact canvas geometry used for this render
@@ -485,15 +509,15 @@ function render() {
   for (let v = Math.ceil(minV); v <= Math.floor(maxV); v++) allVals.add(v);
   const sortedVals = [...allVals].sort((a, b) => a - b);
 
-  ctx2d.font = "bold 11px Arial"; ctx2d.textAlign = "left";
+  ctx2d.font = "bold 11px Arial"; ctx2d.textAlign = "left"; ctx2d.fillStyle = "#000000";
   for (const v of sortedVals) {
     const y = yOfValue(v, minV, maxV);
     if (y < PAD.top - 1 || y > PAD.top + pH() + 1) continue;
     // Gridline
-    ctx2d.strokeStyle = "#6e7299"; ctx2d.lineWidth = 1.2;
+    ctx2d.strokeStyle = "#999999"; ctx2d.lineWidth = 0.8;
     ctx2d.beginPath(); ctx2d.moveTo(PAD.left, y); ctx2d.lineTo(PAD.left + pW(), y); ctx2d.stroke();
     // Label on RIGHT
-    ctx2d.fillStyle = "#c8cfe8";
+    ctx2d.fillStyle = "#000000";
     ctx2d.fillText(v, PAD.left + pW() + 4, y + 3);
   }
 
@@ -501,10 +525,10 @@ function render() {
   const labelStep = Math.max(1, Math.floor(draws.length / 6));
   for (let i = 0; i < draws.length; i++) {
     const x = xOfDate(draws[i].DrawDate);
-    ctx2d.strokeStyle = "#6e7299"; ctx2d.lineWidth = 1.2;
+    ctx2d.strokeStyle = "#999999"; ctx2d.lineWidth = 0.8;
     ctx2d.beginPath(); ctx2d.moveTo(x, PAD.top); ctx2d.lineTo(x, PAD.top + pH()); ctx2d.stroke();
   }
-  ctx2d.fillStyle = "#c8cfe8"; ctx2d.font = "11px Arial"; ctx2d.textAlign = "center";
+  ctx2d.fillStyle = "#000000"; ctx2d.font = "11px Arial"; ctx2d.textAlign = "center";
   for (let i = 0; i < draws.length; i += labelStep) {
     const x = xOfDate(draws[i].DrawDate);
     ctx2d.fillText(draws[i].DrawDate.slice(0, 7), x, canvas.height - PAD.bottom + 14);
@@ -717,52 +741,81 @@ scrollbar.addEventListener("change", async () => {
 });
 
 // ── Plot interaction ──────────────────────────────────────────────
-canvas.addEventListener("click", (e) => {
-  if (S.curveOn) return;
-  if (S.poly.active) return;   // poly mode handles its own clicks
+let _hlDraw = null;
+
+let _hlSet = null;  // which set (1-6) was clicked
+
+function drawHighlight() {
+  if (!_hlDraw || _hlSet == null || !S._dateIndexMap) return;
+  const minV = S.poly.minV, maxV = S.poly.maxV;
+  const v = _hlDraw[`Nbr${_hlSet}`];
+  if (v == null) return;
+  const x = xOfDate(_hlDraw.DrawDate);
+  const y = yOfValue(v, minV, maxV);
+  const r = 18;
+  // Offset circle up and to the left so cursor doesn't cover the number
+  const cx = x - 26;
+  const cy = y - 26;
+  // Filled circle
+  ctx2d.beginPath();
+  ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx2d.fillStyle = SET_COLORS[_hlSet - 1];
+  ctx2d.fill();
+  // Border
+  ctx2d.strokeStyle = "#ffffff";
+  ctx2d.lineWidth = 2;
+  ctx2d.stroke();
+  // Number inside
+  ctx2d.fillStyle = "#ffffff";
+  ctx2d.font = "bold 13px Arial";
+  ctx2d.textAlign = "center";
+  ctx2d.textBaseline = "middle";
+  ctx2d.fillText(String(v), cx, cy);
+  ctx2d.textBaseline = "alphabetic";
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  if (S.curveOn || S.poly.active) return;
   const rect = canvas.getBoundingClientRect();
   const px = e.clientX - rect.left;
   const py = e.clientY - rect.top;
   if (px < PAD.left || px > PAD.left + pW()) return;
-
   const draw = drawAtX(px);
   if (!draw) return;
+  _hlDraw = draw;
 
-  document.getElementById("ib-date").textContent = draw.DrawDate;
-  document.getElementById("ib-idx").textContent  = `Draw #${draw.DrawIndex}`;
-
-  const ballsEl = document.getElementById("ib-balls");
-  ballsEl.innerHTML = "";
-  for (let s = 1; s <= 5; s++) {
-    const b = document.createElement("div");
-    b.className = "ball";
-    b.style.background = SET_COLORS[s-1];
-    b.style.color = "#1e1e2e";
-    b.textContent = draw[`Nbr${s}`];
-    ballsEl.appendChild(b);
+  // Find which set's point is closest to the click (Y distance)
+  const minV = S.poly.minV, maxV = S.poly.maxV;
+  let bestSet = 1, bestDist = Infinity;
+  for (let s = 1; s <= 6; s++) {
+    const v = draw[`Nbr${s}`];
+    if (v == null) continue;
+    const dy = Math.abs(yOfValue(v, minV, maxV) - py);
+    if (dy < bestDist) { bestDist = dy; bestSet = s; }
   }
-  if (draw.Nbr6 != null) {
-    const b = document.createElement("div");
-    b.className = "ball";
-    b.style.background = SET_COLORS[5];
-    b.style.color = "#1e1e2e";
-    b.textContent = draw.Nbr6;
-    ballsEl.appendChild(b);
-  }
+  _hlSet = bestSet;
 
-  // Position popup
-  let bx = e.clientX - wrap.getBoundingClientRect().left + 14;
-  let by = e.clientY - wrap.getBoundingClientRect().top  + 14;
-  if (bx + 180 > wrap.offsetWidth)  bx -= 194;
-  if (by + 90  > wrap.offsetHeight) by -= 104;
-  inspBox.style.left    = bx + "px";
-  inspBox.style.top     = by + "px";
-  inspBox.style.display = "block";
+  // Show wins bar
+  const wDate = document.getElementById("wins-date");
+  wDate.textContent = draw.DrawDate;
+  wDate.style.color = "#0055cc";
+  const wBalls = document.getElementById("wins-balls");
+  wBalls.innerHTML = "";
+  for (let s = 1; s <= 6; s++) {
+    const v = draw[`Nbr${s}`];
+    if (v == null) continue;
+    const b = document.createElement("div");
+    b.className = "wins-ball";
+    b.style.background = SET_COLORS[s - 1];
+    b.textContent = v;
+    wBalls.appendChild(b);
+  }
+  drawHighlight();
 });
 
-document.addEventListener("click", (e) => {
-  if (!inspBox.contains(e.target) && e.target !== canvas)
-    inspBox.style.display = "none";
+canvas.addEventListener("mouseup", (e) => {
+  if (S.curveOn || S.poly.active) return;
+  if (_hlDraw) { _hlDraw = null; _hlSet = null; render(); }
 });
 
 canvas.addEventListener("mousemove", (e) => {
@@ -1135,11 +1188,11 @@ async function openFutureCorridor() {
   const dateLbl  = document.getElementById("fc-date-label");
 
   const LOTTO_LABELS = {
-    CA: "California SuperLotto Plus",
+    CA: "California Lotto",
     FL: "Florida Lotto",
     MM: "Mega Millions",
     PB: "Powerball",
-    PD: "Powerball Double Play",
+    PD: "Powerball Double",
   };
 
   overlay.style.display = "flex";

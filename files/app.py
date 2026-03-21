@@ -63,11 +63,11 @@ PB_PD_SCALE   = 0.6
 PB_PD_TYPES   = {"PB", "PD"}
 
 LOTTO_LABELS = {
-    "CA": "California SuperLotto Plus",
+    "CA": "California Lotto",
     "FL": "Florida Lotto",
     "MM": "Mega Millions",
     "PB": "Powerball",
-    "PD": "Powerball Double Play",
+    "PD": "Powerball Double",
 }
 
 
@@ -478,14 +478,11 @@ def api_links_add():
     data = request.get_json(silent=True) or {}
     category = (data.get("category") or "").strip().lower()
     url      = (data.get("url") or "").strip()
-    title    = (data.get("title") or "").strip()
 
     if category not in CATEGORIES:
         return jsonify({"error": f"Category must be one of: {', '.join(CATEGORIES)}"}), 400
     if not url:
         return jsonify({"error": "URL is required"}), 400
-    if not title:
-        return jsonify({"error": "Title is required"}), 400
 
     # URL validation
     try:
@@ -496,6 +493,12 @@ def api_links_add():
     # Cap check
     if db_links.count_links() >= db_links.MAX_LINKS:
         return jsonify({"error": f"Maximum of {db_links.MAX_LINKS} links reached"}), 400
+
+    # Fetch title
+    try:
+        title = links_fetcher.fetch_title(url)
+    except links_fetcher.FetchError:
+        return jsonify({"error": "Could not read video title"}), 422
 
     new_id = db_links.add_link(category, title, url)
     link = db_links.get_link(new_id)
@@ -516,11 +519,10 @@ def api_links_fetch_title():
         return jsonify({"error": "URL is required"}), 400
     try:
         links_fetcher.validate_url(url)
-    except links_fetcher.FetchError as e:
-        return jsonify({"error": str(e)}), 400
-    # Best-effort fetch — returns None if YouTube blocks the request
-    title = links_fetcher.fetch_title(url)
-    return jsonify({"title": title})
+        title = links_fetcher.fetch_title(url)
+        return jsonify({"title": title})
+    except links_fetcher.FetchError:
+        return jsonify({"error": "Could not read video title"}), 422
 
 
 # ---------------------------------------------------------------------------
@@ -549,10 +551,12 @@ def api_links_update(link_id):
     except links_fetcher.FetchError as e:
         return jsonify({"error": str(e)}), 400
 
-    # Re-fetch title if URL changed (best-effort; falls back to existing title)
+    # Re-fetch title if URL changed
     if url != existing["Url"]:
-        fetched = links_fetcher.fetch_title(url)
-        title = fetched if fetched else existing["Title"]
+        try:
+            title = links_fetcher.fetch_title(url)
+        except links_fetcher.FetchError:
+            return jsonify({"error": "Could not read video title"}), 422
     else:
         title = existing["Title"]
 

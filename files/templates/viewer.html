@@ -15,16 +15,24 @@ body {
 #topbar {
   background: #f0f0f0; border-bottom: 1px solid #cccccc;
   padding: 6px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  flex-shrink: 0; font-size: 1.15rem;
+  flex-shrink: 0; font-size: 1.36rem;
 }
 #topbar select { background:#ffffff; color:#1a1a2e; border:1px solid #aaaaaa;
-  padding:4px 8px; border-radius:4px; cursor:pointer; }
+  padding:6px 12px; border-radius:4px; cursor:pointer; font-size:1.05rem; }
 #topbar button { background:#e0e0e0; color:#1a1a2e; border:1px solid #aaaaaa;
-  padding:4px 10px; border-radius:4px; cursor:pointer; }
+  padding:6px 12px; border-radius:4px; cursor:pointer; font-size:1.05rem; }
 #topbar button:hover  { background:#cccccc; }
 #topbar button.active { background:#4488ff; color:#ffffff; border-color:#4488ff; }
 .sep { color:#aaaaaa; padding:0 2px; }
 #window-info { color:#666666; font-size:0.78rem; margin-left:4px; }
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 
 /* ── Canvas area ── */
 #canvas-wrap { flex:1; position:relative; overflow:hidden; padding:8px 12px 0 12px; background:#ffffff; }
@@ -54,9 +62,9 @@ body {
   flex-shrink:0; background:#f0f0f0; border-top:1px solid #cccccc;
   padding:4px 12px; display:flex; align-items:center; gap:12px; font-size:0.8rem;
 }
-.ds-check-wrap { display:flex; align-items:center; gap:4px; cursor:pointer; }
-.ds-check-wrap input[type=checkbox] { width:13px; height:13px; cursor:pointer; accent-color:var(--ds-color); }
-.ds-check-wrap span { color:var(--ds-color); font-size:0.78rem; }
+.ds-check-wrap { display:flex; align-items:center; gap:6px; cursor:pointer; }
+.ds-check-wrap input[type=checkbox] { width:18px; height:18px; cursor:pointer; accent-color:var(--ds-color); }
+.ds-check-wrap span { color:var(--ds-color); font-size:1.15rem; font-weight:700; line-height:1; }
 #btn-redraw {
   background:#4488ff; color:#ffffff; border:none;
   padding:3px 14px; border-radius:4px; cursor:pointer; font-size:0.8rem; font-weight:bold;
@@ -180,7 +188,7 @@ body {
 <!-- ── Top bar ── -->
 <div id="topbar">
   <!-- 1. Home -->
-  <a href="/home" style="color:#ffffff;font-size:1.15rem;text-decoration:none;padding:4px 10px;background:#4488ff;border:1px solid #2266dd;border-radius:4px;font-weight:bold;">Home</a>
+  <a href="/home" style="color:#ffffff;font-size:1.22rem;text-decoration:none;padding:5px 12px;background:#4488ff;border:1px solid #2266dd;border-radius:4px;font-weight:bold;">Home</a>
 
   <span class="sep">|</span>
 
@@ -241,17 +249,19 @@ body {
   <!-- 8. Future Corridor -->
   <button id="btn-future-corridor">Future Corridor</button>
 
-  <span class="sep">|</span>
-  <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-    <input type="checkbox" id="chk-measure-draws">
-    <span>Measure # of Drawings</span>
-  </label>
-  <span id="measure-info" style="font-size:0.75rem;color:#555555;min-width:120px;"></span>
+  <div class="topbar-right">
+    <span class="sep">|</span>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <input type="checkbox" id="chk-measure-draws">
+      <span>Measure # of Drawings</span>
+    </label>
+    <span id="measure-info" style="font-size:0.75rem;color:#555555;min-width:120px;"></span>
 
-  <span class="sep">|</span>
-  <span id="wins-date" style="font-size:1.0rem;font-weight:bold;color:#555555;min-width:90px;"></span>
-  <div id="wins-balls" style="display:flex;gap:5px;align-items:center;"></div>
-  <span id="window-info"></span>
+    <span class="sep">|</span>
+    <span id="wins-date" style="font-size:1.45rem;font-weight:bold;color:#555555;min-width:130px;"></span>
+    <div id="wins-balls" style="display:flex;gap:5px;align-items:center;"></div>
+    <span id="window-info"></span>
+  </div>
 </div>
 
 <!-- ── Canvas ── -->
@@ -459,6 +469,12 @@ function formatDisplayDate(dateStr) {
   return `${mm}/${dd}/${yyyy}`;
 }
 
+function formatMonthYear(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || "";
+  const [yyyy, mm] = dateStr.split("-");
+  return `${mm}/${yyyy}`;
+}
+
 const VIEWER_GAME_LIMITS = {
   CA: { mainMin: 1, mainMax: 47, bonusMin: 1, bonusMax: 27 },
   FL: { mainMin: 1, mainMax: 53, bonusMin: 1, bonusMax: 53 },
@@ -586,10 +602,10 @@ function render() {
     ctx2d.strokeStyle = "#999999"; ctx2d.lineWidth = 0.8;
     ctx2d.beginPath(); ctx2d.moveTo(x, PAD.top); ctx2d.lineTo(x, PAD.top + pH()); ctx2d.stroke();
   }
-  ctx2d.fillStyle = "#000000"; ctx2d.font = "11px Arial"; ctx2d.textAlign = "center";
+  ctx2d.fillStyle = "#000000"; ctx2d.font = "14px Arial"; ctx2d.textAlign = "center";
   for (let i = 0; i < draws.length; i += labelStep) {
     const x = xOfDate(draws[i].DrawDate);
-    ctx2d.fillText(draws[i].DrawDate.slice(0, 7), x, canvas.height - PAD.bottom + 14);
+    ctx2d.fillText(formatMonthYear(draws[i].DrawDate), x, canvas.height - PAD.bottom + 14);
   }
 
   ctx2d.globalAlpha = 1.0;
@@ -849,7 +865,10 @@ function measurePointFromClick(draw, py) {
 function getMeasuredDrawDistance() {
   const { start, end } = S.measure;
   if (!start || !end) return null;
-  return Math.abs(end.draw.DrawIndex - start.draw.DrawIndex);
+  const startPos = S._dateIndexMap?.[start.draw.DrawDate];
+  const endPos = S._dateIndexMap?.[end.draw.DrawDate];
+  if (startPos == null || endPos == null) return null;
+  return Math.abs(endPos - startPos);
 }
 
 function updateMeasureInfo() {
@@ -863,7 +882,7 @@ function updateMeasureInfo() {
     return;
   }
   if (!end) {
-    measureInfo.textContent = `Start draw ${start.draw.DrawIndex}`;
+    measureInfo.textContent = `Start ${formatDisplayDate(start.draw.DrawDate)}`;
     return;
   }
   measureInfo.textContent = `${getMeasuredDrawDistance()} drawings`;

@@ -320,6 +320,12 @@ function makeDeltaChip(v) {
   return c;
 }
 
+function formatDisplayDate(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || "";
+  const [yyyy, mm, dd] = dateStr.split("-");
+  return `${mm}/${dd}/${yyyy}`;
+}
+
 // ── Render current draw ───────────────────────────────────────────────────────
 
 function renderCurrent(draws) {
@@ -331,6 +337,8 @@ function renderCurrent(draws) {
     `Draw #${curr.DrawIndex}  —  ${curr.DrawDate}`;
 
   const ballRow = document.getElementById("curr-balls");
+  document.getElementById("curr-date").textContent =
+    `Draw #${curr.DrawIndex}  -  ${formatDisplayDate(curr.DrawDate)}`;
   ballRow.innerHTML = "";
   for (let s = 1; s <= 6; s++) {
     const v = curr[`Nbr${s}`];
@@ -404,6 +412,7 @@ function renderTable(matches) {
       <td>${posTags}</td>
       <td style="font-size:0.78rem;">${anchorNums}</td>
     `;
+    tr.innerHTML = tr.innerHTML.replace(m.anchor_date, formatDisplayDate(m.anchor_date));
 
     if (clickable) {
       tr.addEventListener("click", () => selectMatch(i));
@@ -496,6 +505,8 @@ function selectMatch(idx) {
     `Match #${idx + 1} — Anchor draw #${m.anchor_index} (${m.anchor_date})`;
 
   // Anchor balls
+  document.getElementById("overlay-title").textContent =
+    `Match #${idx + 1} - Anchor draw #${m.anchor_index} (${formatDisplayDate(m.anchor_date)})`;
   const anchorBalls = document.getElementById("ov-anchor-balls");
   anchorBalls.innerHTML = "";
   for (let s = 1; s <= 6; s++) {
@@ -782,6 +793,8 @@ function renderMiniCharts(idx) {
     `Set context — Anchor #${m.anchor_index} (${m.anchor_date})`;
 
   // Draw after layout settles
+  document.getElementById("minichart-title").textContent =
+    `Set context - Anchor #${m.anchor_index} (${formatDisplayDate(m.anchor_date)})`;
   requestAnimationFrame(() => {
     drawMiniCanvas(
       document.getElementById("mc-hist"),

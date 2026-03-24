@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 scraper.py  ──  Phase 1 missing-draw fetcher
 
@@ -32,9 +34,11 @@ import re
 import threading
 import time
 from datetime import datetime
+from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 
 import db
 
@@ -58,7 +62,7 @@ BROWSER_HEADERS = {
 
 
 # ── HTTP fetch ───────────────────────────────────────────
-def _fetch(url: str) -> str | None:
+def _fetch(url: str) -> Optional[str]:
     try:
         resp = requests.get(url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT)
         if resp.status_code == 404:
@@ -79,26 +83,10 @@ def parse_lottery_net_ca(html: str) -> list[dict]:
     Balls: li.ball x5 (sorted ascending), li.mega-ball = bonus.
     """
     soup = BeautifulSoup(html, 'lxml')
-    results = []
-    for container in soup.find_all('div', class_='wider'):
-        link = container.find(
-            'a', href=re.compile(r'/superlotto-plus/numbers/\d{2}-\d{2}-\d{4}'))
-        if not link:
-            continue
-        m = re.search(r'/(\d{2}-\d{2}-\d{4})$', link['href'])
-        if not m:
-            continue
-        dt = datetime.strptime(m.group(1), '%m-%d-%Y').strftime('%Y-%m-%d')
-        balls = container.find_all('li', class_='ball')
-        mega  = container.find('li', class_='mega-ball')
-        nums  = sorted([int(b.text.strip()) for b in balls
-                        if b.text.strip().isdigit()])
-        bonus = int(mega.text.strip()) if mega and mega.text.strip().isdigit() else None
-        if len(nums) == 5:
-            results.append({'draw_date': dt,
-                            'n1': nums[0], 'n2': nums[1], 'n3': nums[2],
-                            'n4': nums[3], 'n5': nums[4], 'n6': bonus})
-    return results
+    return _parse_lottery_net_draws(
+        soup,
+        href_pattern=r'/california/superlotto-plus/numbers/\d{2}-\d{2}-\d{4}$',
+    )
 
 
 def parse_lottery_net_mm(html: str) -> list[dict]:
@@ -109,34 +97,84 @@ def parse_lottery_net_mm(html: str) -> list[dict]:
     Balls: li.ball x5 (sorted), li.mega-ball = bonus.
     """
     soup = BeautifulSoup(html, 'lxml')
-    results = []
+    return _parse_lottery_net_draws(
+        soup,
+        href_pattern=r'/mega-millions/numbers/\d{2}-\d{2}-\d{4}$',
+    )
 
-    def _extract(block):
-        link = block.find(
-            'a', href=re.compile(r'/mega-millions/numbers/\d{2}-\d{2}-\d{4}'))
-        if not link:
-            return None
-        m = re.search(r'/(\d{2}-\d{2}-\d{4})$', link['href'])
+
+def _parse_lottery_net_draws(soup: BeautifulSoup, href_pattern: str) -> list[dict]:
+    """
+    Parse Lottery.net year pages for CA SuperLotto and Mega Millions.
+
+    Their markup has changed over time. Older pages grouped draws inside
+    specific div containers; newer pages still include the dated result links
+    and ball list items, but not necessarily the same wrapper classes.
+    """
+    pattern = re.compile(href_pattern)
+    results = []
+    seen_dates = set()
+
+    for link in soup.find_all('a', href=pattern):
+        href = link.get('href', '')
+        m = re.search(r'/(\d{2}-\d{2}-\d{4})$', href)
         if not m:
-            return None
-        dt = datetime.strptime(m.group(1), '%m-%d-%Y').strftime('%Y-%m-%d')
-        balls = block.find_all('li', class_='ball')
-        mega  = block.find('li', class_='mega-ball')
-        nums  = sorted([int(b.text.strip()) for b in balls
-                        if b.text.strip().isdigit()])
-        bonus = int(mega.text.strip()) if mega and mega.text.strip().isdigit() else None
-        if len(nums) == 5:
-            return {'draw_date': dt,
-                    'n1': nums[0], 'n2': nums[1], 'n3': nums[2],
-                    'n4': nums[3], 'n5': nums[4], 'n6': bonus}
+            continue
+
+        draw_date = datetime.strptime(m.group(1), '%m-%d-%Y').strftime('%Y-%m-%d')
+        if draw_date in seen_dates:
+            continue
+
+        container = _find_lottery_net_result_container(link)
+        if not container:
+            continue
+
+        parsed = _extract_lottery_net_numbers(container, draw_date)
+        if parsed:
+            results.append(parsed)
+            seen_dates.add(draw_date)
+
+    return results
+
+
+def _find_lottery_net_result_container(link: Tag) -> Optional[Tag]:
+    """
+    Walk up from a dated result link until we reach a node that contains the
+    corresponding ball list. This works across both the old and newer layouts.
+    """
+    for parent in link.parents:
+        if not isinstance(parent, Tag):
+            continue
+
+        main_balls = parent.select('li.ball')
+        bonus_ball = parent.select_one('li.mega-ball')
+        if len(main_balls) >= 5 and bonus_ball:
+            return parent
+
+    return None
+
+
+def _extract_lottery_net_numbers(container: Tag, draw_date: str) -> Optional[dict]:
+    nums = sorted(
+        int(ball.get_text(strip=True))
+        for ball in container.select('li.ball')
+        if ball.get_text(strip=True).isdigit()
+    )
+    mega = container.select_one('li.mega-ball')
+    bonus = None
+    if mega:
+        mega_text = mega.get_text(strip=True)
+        if mega_text.isdigit():
+            bonus = int(mega_text)
+
+    if len(nums) != 5 or bonus is None:
         return None
 
-    for sel in ('div.latestResults', 'div.previousResults'):
-        for block in soup.select(sel):
-            r = _extract(block)
-            if r:
-                results.append(r)
-    return results
+    return {
+        'draw_date': draw_date,
+        'n1': nums[0], 'n2': nums[1], 'n3': nums[2],
+        'n4': nums[3], 'n5': nums[4], 'n6': bonus,
+    }
 
 
 def parse_lottonumbers_fl(html: str) -> list[dict]:

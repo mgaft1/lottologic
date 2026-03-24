@@ -242,6 +242,13 @@ body {
   <button id="btn-future-corridor">Future Corridor</button>
 
   <span class="sep">|</span>
+  <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+    <input type="checkbox" id="chk-measure-draws">
+    <span>Measure # of Drawings</span>
+  </label>
+  <span id="measure-info" style="font-size:0.75rem;color:#555555;min-width:120px;"></span>
+
+  <span class="sep">|</span>
   <span id="wins-date" style="font-size:1.0rem;font-weight:bold;color:#555555;min-width:90px;"></span>
   <div id="wins-balls" style="display:flex;gap:5px;align-items:center;"></div>
   <span id="window-info"></span>
@@ -364,6 +371,11 @@ const S = {
   visibleSets: [1,2,3,4,5,6],   // all on at page load
   bandsOn:     false,
   bandData:    [],
+  measure: {
+    active: false,
+    start: null,
+    end: null,
+  },
   poly: {
     active:  false,      // checkbox on?
     points:  [],         // [{di, val}]  data-space: draw-index, lotto value
@@ -384,6 +396,7 @@ const statusWin = document.getElementById("status-window");
 const statusCnt = document.getElementById("status-count");
 const statusHov = document.getElementById("status-hover");
 const inspBox   = document.getElementById("inspect-box");
+const measureInfo = document.getElementById("measure-info");
 
 // ── Per-set colours ───────────────────────────────────────────────
 const SET_COLORS = ["#8a2be2","#ff4500","#000080","#006400","#4b0082","#a52a2a"];
@@ -393,6 +406,12 @@ async function fetchDraws() {
   const url = `/api/draws?lotto=${S.lotto}&cutoff_now=${S.anchor}&cutoff_past=${S.cutoffPast}`;
   const r = await fetch(url);
   S.draws = await r.json();
+  if (S.measure.active) {
+    const dates = new Set(S.draws.map(d => d.DrawDate));
+    const keepStart = S.measure.start && dates.has(S.measure.start.draw.DrawDate);
+    const keepEnd = S.measure.end && dates.has(S.measure.end.draw.DrawDate);
+    if (!keepStart || (S.measure.end && !keepEnd)) clearMeasureSelection();
+  }
 }
 
 // ── Canvas sizing ─────────────────────────────────────────────────
@@ -434,6 +453,41 @@ function drawAtX(px) {
   return best;
 }
 
+function formatDisplayDate(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || "";
+  const [yyyy, mm, dd] = dateStr.split("-");
+  return `${mm}/${dd}/${yyyy}`;
+}
+
+const VIEWER_GAME_LIMITS = {
+  CA: { mainMin: 1, mainMax: 47, bonusMin: 1, bonusMax: 27 },
+  FL: { mainMin: 1, mainMax: 53, bonusMin: 1, bonusMax: 53 },
+  MM: { mainMin: 1, mainMax: 70, bonusMin: 1, bonusMax: 25 },
+  PB: { mainMin: 1, mainMax: 69, bonusMin: 1, bonusMax: 26 },
+  PD: { mainMin: 1, mainMax: 69, bonusMin: 1, bonusMax: 26 },
+};
+
+function getViewerRangeLimits(lotto, visibleSets) {
+  const limits = VIEWER_GAME_LIMITS[lotto] || VIEWER_GAME_LIMITS.CA;
+  let minV = Infinity;
+  let maxV = -Infinity;
+
+  for (const s of visibleSets) {
+    if (s === 6) {
+      minV = Math.min(minV, limits.bonusMin);
+      maxV = Math.max(maxV, limits.bonusMax);
+    } else {
+      minV = Math.min(minV, limits.mainMin);
+      maxV = Math.max(maxV, limits.mainMax);
+    }
+  }
+
+  if (!isFinite(minV) || !isFinite(maxV)) {
+    return { minV: 1, maxV: limits.mainMax };
+  }
+  return { minV, maxV };
+}
+
 // ── Render ────────────────────────────────────────────────────────
 function render() {
   resizeCanvas();
@@ -447,6 +501,10 @@ function render() {
       ? `  (${S.days}d × 0.6 = ${S.effDays}d)` : `  (${S.effDays}d)`);
   statusWin.textContent = `${S.cutoffPast} → ${S.anchor}`;
   statusCnt.textContent = draws.length + " draws";
+  winInfo.textContent = formatDisplayDate(S.cutoffPast) + " to " + formatDisplayDate(S.anchor) +
+    (S.lotto === "PB" || S.lotto === "PD"
+      ? `  (${S.days}d x 0.6 = ${S.effDays}d)` : `  (${S.effDays}d)`);
+  statusWin.textContent = `${formatDisplayDate(S.cutoffPast)} to ${formatDisplayDate(S.anchor)}`;
 
   if (!draws.length) {
     ctx2d.fillStyle = "#585b70";
@@ -487,9 +545,9 @@ function render() {
       if (v != null) { minV = Math.min(minV, v); maxV = Math.max(maxV, v); }
     }
   }
-  const padV = Math.max(2, Math.round((maxV - minV) * 0.05));
-  minV -= padV; maxV += padV;
-  if (minV < 1) minV = 1;  // lotto numbers never go below 1
+  const rangeLimits = getViewerRangeLimits(S.lotto, S.visibleSets);
+  minV = rangeLimits.minV;
+  maxV = rangeLimits.maxV;
   // Keep in sync so click handler uses identical Y mapping
   S.poly.minV = minV; S.poly.maxV = maxV;
   // Cache exact canvas geometry used for this render
@@ -584,6 +642,7 @@ function render() {
   renderPolyCurve(minV, maxV);
   renderCurves();
   renderBands(minV, maxV);
+  renderMeasureOverlay();
 }
 
 function renderCurves() {
@@ -720,6 +779,7 @@ async function updateScrollLabel(idx) {
   const data = await r.json();
   const d = data.date || "";
   scrollLbl.textContent = `draw ${idx}  ${d}`;
+  scrollLbl.textContent = `draw ${idx}  ${formatDisplayDate(d)}`;
   return d;
 }
 
@@ -774,6 +834,80 @@ function drawHighlight() {
   ctx2d.textBaseline = "alphabetic";
 }
 
+function measurePointFromClick(draw, py) {
+  const minV = S.poly.minV, maxV = S.poly.maxV;
+  let bestSet = 1, bestDist = Infinity;
+  for (let s = 1; s <= 6; s++) {
+    const v = draw[`Nbr${s}`];
+    if (v == null) continue;
+    const dy = Math.abs(yOfValue(v, minV, maxV) - py);
+    if (dy < bestDist) { bestDist = dy; bestSet = s; }
+  }
+  return { draw, set: bestSet };
+}
+
+function getMeasuredDrawDistance() {
+  const { start, end } = S.measure;
+  if (!start || !end) return null;
+  return Math.abs(end.draw.DrawIndex - start.draw.DrawIndex);
+}
+
+function updateMeasureInfo() {
+  const { active, start, end } = S.measure;
+  if (!active) {
+    measureInfo.textContent = "";
+    return;
+  }
+  if (!start) {
+    measureInfo.textContent = "Select first point";
+    return;
+  }
+  if (!end) {
+    measureInfo.textContent = `Start draw ${start.draw.DrawIndex}`;
+    return;
+  }
+  measureInfo.textContent = `${getMeasuredDrawDistance()} drawings`;
+}
+
+function clearMeasureSelection() {
+  S.measure.start = null;
+  S.measure.end = null;
+  updateMeasureInfo();
+}
+
+function renderMeasureOverlay() {
+  const { start, end } = S.measure;
+  if (!S.measure.active || !start || !end) return;
+
+  const minV = S.poly.minV, maxV = S.poly.maxV;
+  const startVal = start.draw[`Nbr${start.set}`];
+  const endVal = end.draw[`Nbr${end.set}`];
+  if (startVal == null || endVal == null) return;
+
+  const x1 = xOfDate(start.draw.DrawDate);
+  const x2 = xOfDate(end.draw.DrawDate);
+  const y1 = yOfValue(startVal, minV, maxV);
+  const y2 = yOfValue(endVal, minV, maxV);
+  const topY = Math.max(PAD.top + 24, Math.min(y1, y2) - 110);
+  const distance = getMeasuredDrawDistance();
+
+  ctx2d.save();
+  ctx2d.strokeStyle = "#000000";
+  ctx2d.lineWidth = 5;
+  ctx2d.beginPath();
+  ctx2d.moveTo(x1, y1);
+  ctx2d.lineTo(x1, topY);
+  ctx2d.moveTo(x2, y2);
+  ctx2d.lineTo(x2, topY);
+  ctx2d.stroke();
+
+  ctx2d.fillStyle = "#000000";
+  ctx2d.font = "bold 24px Arial";
+  ctx2d.textAlign = "center";
+  ctx2d.fillText(String(distance), (x1 + x2) / 2, topY + 28);
+  ctx2d.restore();
+}
+
 canvas.addEventListener("mousedown", (e) => {
   if (S.curveOn || S.poly.active) return;
   const rect = canvas.getBoundingClientRect();
@@ -782,6 +916,18 @@ canvas.addEventListener("mousedown", (e) => {
   if (px < PAD.left || px > PAD.left + pW()) return;
   const draw = drawAtX(px);
   if (!draw) return;
+  if (S.measure.active) {
+    const point = measurePointFromClick(draw, py);
+    if (!S.measure.start || S.measure.end) {
+      S.measure.start = point;
+      S.measure.end = null;
+    } else {
+      S.measure.end = point;
+    }
+    updateMeasureInfo();
+    render();
+    return;
+  }
   _hlDraw = draw;
 
   // Find which set's point is closest to the click (Y distance)
@@ -798,6 +944,7 @@ canvas.addEventListener("mousedown", (e) => {
   // Show wins bar
   const wDate = document.getElementById("wins-date");
   wDate.textContent = draw.DrawDate;
+  wDate.textContent = formatDisplayDate(draw.DrawDate);
   wDate.style.color = "#0055cc";
   const wBalls = document.getElementById("wins-balls");
   wBalls.innerHTML = "";
@@ -815,6 +962,7 @@ canvas.addEventListener("mousedown", (e) => {
 
 canvas.addEventListener("mouseup", (e) => {
   if (S.curveOn || S.poly.active) return;
+  if (S.measure.active) return;
   if (_hlDraw) { _hlDraw = null; _hlSet = null; render(); }
 });
 
@@ -909,6 +1057,12 @@ document.getElementById("chk-bands").addEventListener("change", async function()
   S.bandsOn = this.checked;
   document.getElementById("bands-legend").style.display = this.checked ? "flex" : "none";
   await fetchBands();
+  render();
+});
+
+document.getElementById("chk-measure-draws").addEventListener("change", function() {
+  S.measure.active = this.checked;
+  clearMeasureSelection();
   render();
 });
 
@@ -1080,7 +1234,7 @@ canvas.addEventListener('click', (e) => {
 
   const n = S.poly.points.length;
   // DEBUG + status: show snapped date and point count
-  const debugInfo = `${draw.DrawDate} val=${bestVal}`;
+  const debugInfo = `${formatDisplayDate(draw.DrawDate)} val=${bestVal}`;
   if (n < 4) {
     document.getElementById('poly-status').textContent = `${n}/4 — last: ${debugInfo}`;
   } else {
@@ -1097,6 +1251,7 @@ canvas.addEventListener('click', (e) => {
 // ── Boot ──────────────────────────────────────────────────────────
 (async () => {
   scrollbar.value = S.indexHi;
+  updateMeasureInfo();
   updateScrollLabel(S.indexHi);
   await fetchDraws();
   render();
@@ -1203,7 +1358,7 @@ async function openFutureCorridor() {
 
   // Forecast date = next draw after latest known draw
   const forecastDate = nextDrawDate(S.lotto, S.latest);
-  dateLbl.textContent = forecastDate;
+  dateLbl.textContent = formatDisplayDate(forecastDate);
 
   // Fetch forecast bands for the latest known draw date
   // (the most recent row in ForecastPredictions = bands projected for that date)

@@ -74,7 +74,7 @@ body {
 
 /* ── Dataset fade when curve/poly active ── */
 #plot-canvas.mode-curve  { cursor: crosshair; }
-#plot-canvas.mode-poly   { cursor: cell; }
+#plot-canvas.mode-poly   { cursor: default; }
 .datasets-faded .ds-check-wrap span { opacity: 0.4; }
 .datasets-faded #btn-redraw { opacity: 0.4; pointer-events: none; }
 
@@ -99,10 +99,10 @@ body {
 
 /* ── Bands toolbar ── */
 #bands-toolbar {
-  flex-shrink:0; background:#f0f0f0; border-top:1px solid #cccccc;
-  padding:4px 12px; display:flex; align-items:center; gap:10px; font-size:0.8rem; color:#333333;
+  display:flex; align-items:center; gap:10px; color:#333333;
+  font-size:1.1rem;
 }
-#chk-bands { width:14px; height:14px; cursor:pointer; accent-color:#2dd4bf; }
+#chk-bands { width:18px; height:18px; cursor:pointer; accent-color:#2dd4bf; }
 
 /* ── Future Corridor Modal ── */
 #fc-overlay {
@@ -248,6 +248,15 @@ body {
 
   <!-- 8. Future Corridor -->
   <button id="btn-future-corridor">Future Corridor</button>
+  <div id="bands-toolbar" style="display:none;">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:1.1rem;">
+      <input type="checkbox" id="chk-bands"> Show Bands
+    </label>
+    <span id="bands-legend" style="display:none;align-items:center;gap:12px;margin-left:6px;font-size:0.95rem;">
+      <span><span style="color:#2dd4bf;font-weight:bold;">â”â”</span> SAFE</span>
+      <span><span style="color:#f87171;">â•Œ â•Œ</span> HOT</span>
+    </span>
+  </div>
 
   <div class="topbar-right">
     <span class="sep">|</span>
@@ -304,11 +313,11 @@ body {
 <div id="poly-toolbar" style="display:none;"></div>
 
 <!-- ── Bands toolbar (visible only when exactly 1 set is checked) ── -->
-<div id="bands-toolbar" style="display:none;">
+<div id="bands-toolbar-legacy" style="display:none;">
   <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-    <input type="checkbox" id="chk-bands"> Show Bands
+    <input type="checkbox" id="chk-bands-legacy"> Show Bands
   </label>
-  <span id="bands-legend" style="display:none;align-items:center;gap:12px;margin-left:6px;font-size:0.75rem;">
+  <span id="bands-legend-legacy" style="display:none;align-items:center;gap:12px;margin-left:6px;font-size:0.75rem;">
     <span><span style="color:#2dd4bf;font-weight:bold;">━━</span> SAFE</span>
     <span><span style="color:#f87171;">╌ ╌</span> HOT</span>
   </span>
@@ -407,6 +416,11 @@ const statusCnt = document.getElementById("status-count");
 const statusHov = document.getElementById("status-hover");
 const inspBox   = document.getElementById("inspect-box");
 const measureInfo = document.getElementById("measure-info");
+
+const bandsLegend = document.getElementById("bands-legend");
+if (bandsLegend) {
+  bandsLegend.innerHTML = `<span>SAFE</span><span>HOT</span>`;
+}
 
 // ── Per-set colours ───────────────────────────────────────────────
 const SET_COLORS = ["#8a2be2","#ff4500","#000080","#006400","#4b0082","#a52a2a"];
@@ -633,23 +647,22 @@ function render() {
     }
   }
 
-  // Set 6 (bonus): dashed line + diamonds
+  // Set 6: draw in the same visible style as the other sets
   const b6 = draws.filter(d => d.Nbr6 != null);
   if (b6.length && S.visibleSets.includes(6)) {
-    ctx2d.strokeStyle = SET_COLORS[5]; ctx2d.lineWidth = 1;
-    ctx2d.setLineDash([4, 4]);
+    ctx2d.strokeStyle = SET_COLORS[5]; ctx2d.lineWidth = 1.5;
     ctx2d.beginPath();
     let started = false;
     for (const d of b6) {
       const x = xOfDate(d.DrawDate), y = yOfValue(d.Nbr6, minV, maxV);
       if (!started) { ctx2d.moveTo(x, y); started = true; } else ctx2d.lineTo(x, y);
     }
-    ctx2d.stroke(); ctx2d.setLineDash([]);
+    ctx2d.stroke();
     for (const d of b6) {
-      const x = xOfDate(d.DrawDate), y = yOfValue(d.Nbr6, minV, maxV), r = 5;
+      const x = xOfDate(d.DrawDate), y = yOfValue(d.Nbr6, minV, maxV);
       ctx2d.fillStyle = SET_COLORS[5];
-      ctx2d.beginPath(); ctx2d.moveTo(x, y-r); ctx2d.lineTo(x+r, y);
-      ctx2d.lineTo(x, y+r); ctx2d.lineTo(x-r, y); ctx2d.closePath(); ctx2d.fill();
+      ctx2d.beginPath(); ctx2d.arc(x, y, 4.5, 0, Math.PI*2);
+      ctx2d.fill();
     }
   }
 
@@ -829,9 +842,13 @@ function drawHighlight() {
   const x = xOfDate(_hlDraw.DrawDate);
   const y = yOfValue(v, minV, maxV);
   const r = 18;
-  // Offset circle up and to the left so cursor doesn't cover the number
+  // Offset circle up and to the left so cursor doesn't cover the number.
+  // If the point is too close to the top edge, flip the badge below it.
   const cx = x - 26;
-  const cy = y - 26;
+  let cy = y - 26;
+  if (cy - r < PAD.top + 2) {
+    cy = y + 26;
+  }
   // Filled circle
   ctx2d.beginPath();
   ctx2d.arc(cx, cy, r, 0, Math.PI * 2);

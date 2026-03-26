@@ -246,6 +246,7 @@ def get_forecast_bands(
             """SELECT DrawDate, SetNumber, SafeLow, SafeHigh, HotLow, HotHigh
                FROM ForecastPredictions
                WHERE LottoType   = ?
+                 AND DrawDate GLOB '????-??-??'
                  AND DrawDate   >= ?
                  AND DrawDate   <= ?
                  AND ModelVersion = ?
@@ -268,7 +269,8 @@ def get_last_forecast_date(lotto_type: str, model_version: str) -> Optional[str]
     with _conn() as con:
         row = con.execute(
             """SELECT MAX(DrawDate) AS last_date FROM ForecastPredictions
-               WHERE LottoType = ? AND ModelVersion = ?""",
+               WHERE LottoType = ? AND ModelVersion = ?
+                 AND DrawDate GLOB '????-??-??'""",
             (lotto_type, model_version),
         ).fetchone()
     return row["last_date"] if row and row["last_date"] else None
@@ -327,6 +329,7 @@ def get_forecast_chart_data(
                    ON  dh.LottoType = fp.LottoType
                    AND dh.DrawDate  = fp.DrawDate
                WHERE fp.LottoType    = ?
+                 AND fp.DrawDate GLOB '????-??-??'
                  AND fp.DrawDate    >= ?
                  AND fp.DrawDate    <= ?
                  AND fp.ModelVersion = ?

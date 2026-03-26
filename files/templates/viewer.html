@@ -108,15 +108,17 @@ body {
 /* ── Future Corridor Modal ── */
 #fc-overlay {
   position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:200;
-  display:flex; align-items:center; justify-content:center;
+  display:block;
 }
 #fc-modal {
+  position:absolute;
   background:#181825; border:1px solid #45475a; border-radius:8px;
   padding:0; width:360px; max-width:95vw; box-shadow:0 8px 32px rgba(0,0,0,0.6);
 }
 #fc-header {
   display:flex; align-items:center; justify-content:space-between;
-  padding:10px 14px 6px 14px; border-bottom:1px solid #313244;
+  padding:10px 14px 6px 14px; border-bottom:1px solid #313244; cursor:move;
+  user-select:none;
 }
 #fc-title { font-size:0.92rem; font-weight:bold; color:#89b4fa; }
 #fc-close {
@@ -193,12 +195,7 @@ body {
 
   <span class="sep">|</span>
 
-  <!-- 2. Draw button -->
-  <button id="btn-redraw">Draw</button>
-
-  <span class="sep">|</span>
-
-  <!-- 3. Lotto type dropdown -->
+  <!-- 2. Lotto type dropdown -->
   <select id="sel-lotto">
     {% for lt in lotto_types %}
     <option value="{{ lt }}" {% if lt == lotto_type %}selected{% endif %}>
@@ -206,6 +203,11 @@ body {
     </option>
     {% endfor %}
   </select>
+
+  <span class="sep">|</span>
+
+  <!-- 3. Draw button -->
+  <button id="btn-redraw">Draw</button>
 
   <span class="sep">|</span>
 
@@ -1374,6 +1376,7 @@ function applySafeOrdering(lotto, safeMin, safeMax) {
 
 async function openFutureCorridor() {
   const overlay  = document.getElementById("fc-overlay");
+  const modal    = document.getElementById("fc-modal");
   const status   = document.getElementById("fc-status");
   const tbody    = document.getElementById("fc-tbody");
   const lbl      = document.getElementById("fc-lotto-label");
@@ -1388,6 +1391,15 @@ async function openFutureCorridor() {
   };
 
   overlay.style.display = "flex";
+  if (!overlay.dataset.positioned) {
+    requestAnimationFrame(() => {
+      const left = Math.max(12, Math.round((window.innerWidth - modal.offsetWidth) / 2));
+      const top = Math.max(12, Math.round((window.innerHeight - modal.offsetHeight) / 2));
+      modal.style.left = `${left}px`;
+      modal.style.top = `${top}px`;
+      overlay.dataset.positioned = "true";
+    });
+  }
   status.textContent = "Loading…";
   tbody.innerHTML = "";
   lbl.textContent = LOTTO_LABELS[S.lotto] || S.lotto;
@@ -1397,9 +1409,9 @@ async function openFutureCorridor() {
   const forecastDate = nextDrawDate(S.lotto, S.latest);
   dateLbl.textContent = formatDisplayDate(forecastDate);
 
-  // Fetch forecast bands for the latest known draw date
-  // (the most recent row in ForecastPredictions = bands projected for that date)
-  const url = `/api/forecast_chart?lotto=${S.lotto}&cutoff_now=${S.latest}&cutoff_past=${S.latest}`;
+  // Forecast rows are stored under the latest known draw date and represent
+  // the projection for the next draw shown above.
+  const url = `/api/forecast?lotto=${S.lotto}&cutoff_now=${S.latest}&cutoff_past=${S.latest}`;
   let rows;
   try {
     const r = await fetch(url);
@@ -1492,6 +1504,35 @@ document.getElementById("btn-future-corridor").addEventListener("click", () => {
 
 // ── Event: close ──────────────────────────────────────────────────
 const fcOverlay = document.getElementById("fc-overlay");
+const fcModal = document.getElementById("fc-modal");
+const fcHeader = document.getElementById("fc-header");
+const fcDrag = { active: false, offsetX: 0, offsetY: 0 };
+
+fcHeader.addEventListener("mousedown", (e) => {
+  if (e.target.id === "fc-close") return;
+  const rect = fcModal.getBoundingClientRect();
+  fcDrag.active = true;
+  fcDrag.offsetX = e.clientX - rect.left;
+  fcDrag.offsetY = e.clientY - rect.top;
+  document.body.style.userSelect = "none";
+});
+
+window.addEventListener("mousemove", (e) => {
+  if (!fcDrag.active) return;
+  const maxLeft = Math.max(12, window.innerWidth - fcModal.offsetWidth - 12);
+  const maxTop = Math.max(12, window.innerHeight - fcModal.offsetHeight - 12);
+  const left = Math.min(Math.max(12, e.clientX - fcDrag.offsetX), maxLeft);
+  const top = Math.min(Math.max(12, e.clientY - fcDrag.offsetY), maxTop);
+  fcModal.style.left = `${left}px`;
+  fcModal.style.top = `${top}px`;
+  fcOverlay.dataset.positioned = "true";
+});
+
+window.addEventListener("mouseup", () => {
+  fcDrag.active = false;
+  document.body.style.userSelect = "";
+});
+
 document.getElementById("fc-close").addEventListener("click", (e) => {
   e.stopPropagation();
   fcOverlay.style.display = "none";

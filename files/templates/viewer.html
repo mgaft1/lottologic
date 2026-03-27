@@ -112,6 +112,16 @@ body {
 .poly-curve-slot.is-empty {
   opacity:0.45;
 }
+.days-radio-group {
+  display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+}
+.days-radio {
+  display:inline-flex; align-items:center; gap:4px; cursor:pointer;
+  color:#1a1a2e; font-size:1.18rem; font-weight:700;
+}
+.days-radio input[type=radio] {
+  width:18px; height:18px; cursor:pointer; accent-color:#4488ff;
+}
 
 /* ── Bands toolbar ── */
 #bands-toolbar {
@@ -236,17 +246,19 @@ body {
 
   <span class="sep">|</span>
 
-  <!-- 5. Days buttons -->
-  {% for d in window_days %}
-  <button class="btn-days {% if d == days %}active{% endif %}" data-days="{{ d }}">{{ d }}</button>
-  {% endfor %}
+  <!-- 5. Days selector -->
+  <div class="days-radio-group">
+    {% for d in window_days %}
+    <label class="days-radio">
+      <input type="radio" name="days-option" class="days-radio-input" data-days="{{ d }}" {% if d == days %}checked{% endif %}>
+      <span>{% if loop.index == 1 %}A{% elif loop.index == 2 %}B{% elif loop.index == 3 %}C{% else %}D{% endif %}</span>
+    </label>
+    {% endfor %}
+  </div>
 
   <span class="sep">|</span>
 
   <!-- 6. Navigation -->
-  <button id="btn-start">⏮ Start</button>
-  <button id="btn-left">◀ Left</button>
-  <button id="btn-right">Right ▶</button>
   <button id="btn-end">End ⏭</button>
 
   <span class="sep">|</span>
@@ -1162,12 +1174,11 @@ document.getElementById("chk-measure-draws").addEventListener("change", function
   render();
 });
 
-// ── Window-size buttons ───────────────────────────────────────────
-document.querySelectorAll(".btn-days").forEach(btn => {
-  btn.addEventListener("click", async () => {
-    S.days = parseInt(btn.dataset.days);
-    document.querySelectorAll(".btn-days").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
+// ── Window-size selector ──────────────────────────────────────────
+document.querySelectorAll(".days-radio-input").forEach(input => {
+  input.addEventListener("change", async () => {
+    if (!input.checked) return;
+    S.days = parseInt(input.dataset.days);
     // Recalculate effective days and cutoffPast; anchor stays fixed
     const r = await fetch(`/api/nav?lotto=${S.lotto}&dir=end&days=${S.days}&anchor=${S.anchor}`);
     // We don't actually want END; we just want eff_days for the new size.
@@ -1182,9 +1193,6 @@ document.querySelectorAll(".btn-days").forEach(btn => {
 });
 
 // ── Nav buttons ───────────────────────────────────────────────────
-document.getElementById("btn-start").addEventListener("click", () => navigate("start"));
-document.getElementById("btn-left"). addEventListener("click", () => navigate("left"));
-document.getElementById("btn-right").addEventListener("click", () => navigate("right"));
 document.getElementById("btn-end").  addEventListener("click", () => navigate("end"));
 
 // ── Lotto type switch ─────────────────────────────────────────────

@@ -97,6 +97,21 @@ body {
 }
 #poly-clear-btn:hover { background:#45475a; }
 #poly-status { display:none; }
+#poly-curve-slots {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.poly-curve-slot {
+  display:flex; align-items:center; gap:4px; cursor:pointer;
+}
+.poly-curve-slot input[type=checkbox] {
+  width:18px; height:18px; cursor:pointer;
+}
+.poly-curve-slot span {
+  font-size:1.08rem; font-weight:700; line-height:1;
+}
+.poly-curve-slot.is-empty {
+  opacity:0.45;
+}
 
 /* ── Bands toolbar ── */
 #bands-toolbar {
@@ -245,6 +260,14 @@ body {
   <span class="led" id="led-4"></span>
   <span id="poly-pt-count" style="color:#cc0000;font-size:1rem;min-width:52px;"></span>
   <button id="poly-clear-btn">Clear</button>
+  <div id="poly-curve-slots">
+    <label class="poly-curve-slot is-empty" id="poly-slot-wrap-1"><input type="checkbox" id="poly-slot-1" disabled><span id="poly-slot-label-1" style="color:#8a2be2">1</span></label>
+    <label class="poly-curve-slot is-empty" id="poly-slot-wrap-2"><input type="checkbox" id="poly-slot-2" disabled><span id="poly-slot-label-2" style="color:#ff4500">2</span></label>
+    <label class="poly-curve-slot is-empty" id="poly-slot-wrap-3"><input type="checkbox" id="poly-slot-3" disabled><span id="poly-slot-label-3" style="color:#000080">3</span></label>
+    <label class="poly-curve-slot is-empty" id="poly-slot-wrap-4"><input type="checkbox" id="poly-slot-4" disabled><span id="poly-slot-label-4" style="color:#006400">4</span></label>
+    <label class="poly-curve-slot is-empty" id="poly-slot-wrap-5"><input type="checkbox" id="poly-slot-5" disabled><span id="poly-slot-label-5" style="color:#4b0082">5</span></label>
+    <label class="poly-curve-slot is-empty" id="poly-slot-wrap-6"><input type="checkbox" id="poly-slot-6" disabled><span id="poly-slot-label-6" style="color:#a52a2a">6</span></label>
+  </div>
   <span id="poly-status" style="color:#888888;font-size:0.75rem;">Check to begin selecting 4 points</span>
 
   <span class="sep">|</span>
@@ -400,8 +423,9 @@ const S = {
   },
   poly: {
     active:  false,      // checkbox on?
-    points:  [],         // [{di, val}]  data-space: draw-index, lotto value
-    coeff:   null,       // [a,b,c,d] once 4 pts captured
+    points:  [],
+    currentSet: null,
+    curves:   Array(7).fill(null),
     minV:    0,          // last-rendered Y range — kept in sync with render()
     maxV:    1,
   },
@@ -427,6 +451,20 @@ if (bandsLegend) {
 
 // ── Per-set colours ───────────────────────────────────────────────
 const SET_COLORS = ["#8a2be2","#ff4500","#000080","#006400","#4b0082","#a52a2a"];
+
+function updatePolyCurveToggles() {
+  for (let s = 1; s <= 6; s++) {
+    const wrap = document.getElementById(`poly-slot-wrap-${s}`);
+    const box = document.getElementById(`poly-slot-${s}`);
+    const label = document.getElementById(`poly-slot-label-${s}`);
+    const curve = S.poly.curves[s];
+    label.textContent = String(s);
+    label.style.color = SET_COLORS[s - 1];
+    box.disabled = !curve;
+    box.checked = !!(curve && curve.visible);
+    wrap.classList.toggle("is-empty", !curve);
+  }
+}
 
 // ── Fetch draws for current window ───────────────────────────────
 async function fetchDraws() {
@@ -670,8 +708,7 @@ function render() {
   }
 
   ctx2d.globalAlpha = 1.0;  // restore before overlays
-  renderPolyPoints(minV, maxV);
-  renderPolyCurve(minV, maxV);
+  renderPolyOverlays(minV, maxV);
   renderCurves();
   renderBands(minV, maxV);
   renderMeasureOverlay();
@@ -728,29 +765,30 @@ function renderBands(minV, maxV) {
   drawLine(r => r.HotLow,   "#f87171", [5, 4]);
 }
 
-function renderPolyPoints(minV, maxV) {
-  if (!S.poly.active && !S.poly.points.length) return;
-  for (let i = 0; i < S.poly.points.length; i++) {
-    const p = S.poly.points[i];
+function renderPolyPointList(points, setNo, minV, maxV) {
+  if (!points || !points.length) return;
+  const color = SET_COLORS[(setNo || 1) - 1] || "#f38ba8";
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
     const x = xOfDate(p.date);
     const y = yOfValue(p.val, minV, maxV);
-    ctx2d.strokeStyle = "#f38ba8"; ctx2d.lineWidth = 2;
+    ctx2d.strokeStyle = color; ctx2d.lineWidth = 2;
     ctx2d.beginPath(); ctx2d.arc(x, y, 8, 0, Math.PI * 2); ctx2d.stroke();
-    ctx2d.fillStyle = "#f38ba8"; ctx2d.font = "bold 9px Arial"; ctx2d.textAlign = "center";
+    ctx2d.fillStyle = color; ctx2d.font = "bold 9px Arial"; ctx2d.textAlign = "center";
     ctx2d.fillText(i + 1, x, y - 11);
   }
 }
 
-function renderPolyCurve(minV, maxV) {
-  if (!S.poly.coeff || !S.draws.length) return;
-  // Evaluate curve using sorted draw order (same order fitCubic used)
+function renderPolyCurveForSet(curve, minV, maxV) {
+  if (!curve || !curve.visible || !curve.coeff || !S.draws.length) return;
   const sortedDraws = [...S.draws].sort((a, b) => a.DrawDate < b.DrawDate ? -1 : 1);
-  ctx2d.strokeStyle = "#f38ba8"; ctx2d.lineWidth = 2.5;
+  const color = SET_COLORS[(curve.set || 1) - 1] || "#f38ba8";
+  ctx2d.strokeStyle = color; ctx2d.lineWidth = 2.5;
   ctx2d.setLineDash([]);
   ctx2d.beginPath();
   let started = false;
   for (let i = 0; i < sortedDraws.length; i++) {
-    const y_data = evalCubic(S.poly.coeff, i);
+    const y_data = evalCubic(curve.coeff, i);
     if (isNaN(y_data) || !isFinite(y_data)) { started = false; continue; }
     if (y_data < minV - 5 || y_data > maxV + 5) { started = false; continue; }
     const x = xOfDate(sortedDraws[i].DrawDate);
@@ -759,6 +797,16 @@ function renderPolyCurve(minV, maxV) {
     if (!started) { ctx2d.moveTo(x, y); started = true; } else ctx2d.lineTo(x, y);
   }
   ctx2d.stroke();
+}
+
+function renderPolyOverlays(minV, maxV) {
+  for (let s = 1; s <= 6; s++) {
+    const curve = S.poly.curves[s];
+    if (!curve || !curve.visible) continue;
+    renderPolyPointList(curve.points, curve.set, minV, maxV);
+    renderPolyCurveForSet(curve, minV, maxV);
+  }
+  renderPolyPointList(S.poly.points, S.poly.currentSet, minV, maxV);
 }
 
 // ── Refresh: fetch + render ───────────────────────────────────────
@@ -870,16 +918,25 @@ function drawHighlight() {
   ctx2d.textBaseline = "alphabetic";
 }
 
-function measurePointFromClick(draw, py) {
+function closestSetPoint(draw, py) {
   const minV = S.poly.minV, maxV = S.poly.maxV;
-  let bestSet = 1, bestDist = Infinity;
+  let bestSet = 1, bestDist = Infinity, bestVal = null;
   for (let s = 1; s <= 6; s++) {
     const v = draw[`Nbr${s}`];
     if (v == null) continue;
     const dy = Math.abs(yOfValue(v, minV, maxV) - py);
-    if (dy < bestDist) { bestDist = dy; bestSet = s; }
+    if (dy < bestDist) {
+      bestDist = dy;
+      bestSet = s;
+      bestVal = v;
+    }
   }
-  return { draw, set: bestSet };
+  return bestVal == null ? null : { set: bestSet, val: bestVal };
+}
+
+function measurePointFromClick(draw, py) {
+  const point = closestSetPoint(draw, py);
+  return { draw, set: point ? point.set : 1 };
 }
 
 function getMeasuredDrawDistance() {
@@ -948,7 +1005,7 @@ function renderMeasureOverlay() {
 }
 
 canvas.addEventListener("mousedown", (e) => {
-  if (S.curveOn || S.poly.active) return;
+  if (S.curveOn) return;
   const rect = canvas.getBoundingClientRect();
   const px = e.clientX - rect.left;
   const py = e.clientY - rect.top;
@@ -1000,7 +1057,7 @@ canvas.addEventListener("mousedown", (e) => {
 });
 
 canvas.addEventListener("mouseup", (e) => {
-  if (S.curveOn || S.poly.active) return;
+  if (S.curveOn) return;
   if (S.measure.active) return;
   if (_hlDraw) { _hlDraw = null; _hlSet = null; render(); }
 });
@@ -1199,29 +1256,46 @@ function updateLEDs() {
 
 function polyReset() {
   S.poly.points = [];
-  S.poly.coeff  = null;
+  S.poly.currentSet = null;
+  S.poly.curves = Array(7).fill(null);
   updateLEDs();
+  updatePolyCurveToggles();
   document.getElementById('poly-status').textContent =
-    S.poly.active ? 'Click 4 points on the chart' : 'Check to begin selecting 4 points';
+    S.poly.active ? 'Click 4 points from the same set' : 'Check to begin selecting 4 points';
   render();
 }
 
 // ── Polynomial checkbox ───────────────────────────────────────────
 document.getElementById('chk-poly').addEventListener('change', function() {
   S.poly.active = this.checked;
-  polyReset();
+  S.poly.points = [];
+  S.poly.currentSet = null;
+  updateLEDs();
+  document.getElementById('poly-status').textContent =
+    S.poly.active ? 'Click 4 points from the same set' : 'Check to begin selecting 4 points';
   updateFadeState();
+  render();
 });
 
 document.getElementById('poly-clear-btn').addEventListener('click', () => {
   polyReset();
 });
 
+for (let s = 1; s <= 6; s++) {
+  document.getElementById(`poly-slot-${s}`).addEventListener('change', function() {
+    if (!S.poly.curves[s]) {
+      this.checked = false;
+      return;
+    }
+    S.poly.curves[s].visible = this.checked;
+    render();
+  });
+}
+
 // ── Canvas poly click: snap to nearest visible data point ────────
 canvas.addEventListener('click', (e) => {
   if (!S.poly.active) return;
   if (!S.draws.length) return;
-  if (S.poly.points.length >= 4) return;
 
   e.stopImmediatePropagation();
 
@@ -1231,17 +1305,9 @@ canvas.addEventListener('click', (e) => {
 
   if (mx < PAD.left || mx > PAD.left + pW()) return;
 
-  const minV = S.poly.minV;
-  const maxV = S.poly.maxV;
-
   // Use geometry cached at last render() — guarantees identical coordinate system
-  const _pW = S.poly._pW || pW();
-  const _pH = S.poly._pH || pH();
-
   // ── Step 1: invert X pixel → timestamp using cached geometry ──
   // Find nearest draw by X pixel distance (index-based spacing)
-  const clicked_ms = 0; // unused placeholder — snap uses pixel distance below
-
   // Find draw whose X pixel position is closest to the click (index-based spacing)
   const sortedDraws = S.poly._sortedDraws || [...S.draws].sort((a,b) => a.DrawDate < b.DrawDate ? -1 : 1);
   let nearestDi = 0;
@@ -1252,35 +1318,38 @@ canvas.addEventListener('click', (e) => {
   }
   const draw = sortedDraws[nearestDi];
 
-  // ── Step 2: invert Y pixel → value using cached geometry ──
-  // yOfValue: py = PAD.top + _pH - ((v - minV) / (maxV - minV)) * _pH
-  // Inverse:  v  = minV + ((PAD.top + _pH - my) / _pH) * (maxV - minV)
-  const clicked_val = minV + ((PAD.top + _pH - my) / _pH) * (maxV - minV);
+  const point = closestSetPoint(draw, my);
+  if (!point) return;
 
-  let bestDv  = Infinity;
-  let bestVal = -1;
-  for (const s of S.visibleSets) {
-    const v = draw[`Nbr${s}`];
-    if (v == null) continue;
-    const dv = Math.abs(v - clicked_val);
-    if (dv < bestDv) { bestDv = dv; bestVal = v; }
+  if (S.poly.currentSet == null) {
+    S.poly.currentSet = point.set;
+  } else if (point.set !== S.poly.currentSet) {
+    document.getElementById('poly-status').textContent =
+      `Curve locked to set ${S.poly.currentSet}; click that set only`;
+    render();
+    return;
   }
 
-  if (bestVal < 0) return;
-
-  S.poly.points.push({ date: draw.DrawDate, val: bestVal });
+  S.poly.points.push({ date: draw.DrawDate, val: point.val });
   updateLEDs();
 
   const n = S.poly.points.length;
-  // DEBUG + status: show snapped date and point count
-  const debugInfo = `${formatDisplayDate(draw.DrawDate)} val=${bestVal}`;
+  const debugInfo = `${formatDisplayDate(draw.DrawDate)} set ${point.set} val=${point.val}`;
   if (n < 4) {
-    document.getElementById('poly-status').textContent = `${n}/4 — last: ${debugInfo}`;
+    document.getElementById('poly-status').textContent = `Set ${point.set}: ${n}/4 — last: ${debugInfo}`;
   } else {
-    S.poly.points.sort((a, b) => a.date < b.date ? -1 : 1);
-    S.poly.coeff = fitCubic(S.poly.points);
-    document.getElementById('poly-status').textContent =
-      (S.poly.coeff ? 'Cubic curve fitted' : 'Fit failed') + ` — last: ${debugInfo}`;
+    const points = [...S.poly.points].sort((a, b) => a.date < b.date ? -1 : 1);
+    const coeff = fitCubic(points);
+    if (coeff) {
+      S.poly.curves[point.set] = { set: point.set, points, coeff, visible: true };
+      updatePolyCurveToggles();
+      document.getElementById('poly-status').textContent = `Curve saved for set ${point.set}`;
+    } else {
+      document.getElementById('poly-status').textContent = `Fit failed for set ${point.set}`;
+    }
+    S.poly.points = [];
+    S.poly.currentSet = null;
+    updateLEDs();
   }
 
   render();
@@ -1291,6 +1360,7 @@ canvas.addEventListener('click', (e) => {
 (async () => {
   scrollbar.value = S.indexHi;
   updateMeasureInfo();
+  updatePolyCurveToggles();
   updateScrollLabel(S.indexHi);
   await fetchDraws();
   render();

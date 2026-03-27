@@ -8,6 +8,7 @@ Background scraper fills missing draws; never blocks rendering.
 import logging
 import os
 import sys
+from itertools import product
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -19,6 +20,7 @@ import db
 import db_forecast
 import db_selection
 import db_links
+import db_ticket_sim
 import selection
 import scraper
 import gap_engine
@@ -29,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("LOTTO_SECRET", "change-me-in-production-32chars!!")
+db_ticket_sim.init_ticket_schema()
+db_ticket_sim.purge_expired_tickets()
 
 # ---------------------------------------------------------------------------
 # Credentials  (set via environment variables; fallback for dev only)
@@ -70,6 +74,39 @@ LOTTO_LABELS = {
     "PD": "Powerball Double",
 }
 
+TICKET_GAME_RULES = {
+    "CA": {"main_count": 5, "main_max": 47, "bonus_max": 27, "base_price": 1.0},
+    "FL": {"main_count": 6, "main_max": 53, "bonus_max": None, "base_price": 2.0},
+    "MM": {"main_count": 5, "main_max": 70, "bonus_max": 24, "base_price": 5.0},
+    "PB": {"main_count": 5, "main_max": 69, "bonus_max": 26, "base_price": 2.0},
+    "PD": {"main_count": 5, "main_max": 69, "bonus_max": 26, "base_price": 1.0},
+}
+
+FIXED_PRIZE_TABLES = {
+    "PB": {
+        (5, True): 0,
+        (5, False): 1_000_000,
+        (4, True): 50_000,
+        (4, False): 100,
+        (3, True): 100,
+        (3, False): 7,
+        (2, True): 7,
+        (1, True): 4,
+        (0, True): 4,
+    },
+    "PD": {
+        (5, True): 10_000_000,
+        (5, False): 500_000,
+        (4, True): 50_000,
+        (4, False): 500,
+        (3, True): 500,
+        (3, False): 20,
+        (2, True): 20,
+        (1, True): 10,
+        (0, True): 7,
+    },
+}
+
 
 # ---------------------------------------------------------------------------
 # Window helpers
@@ -93,6 +130,124 @@ def parse_date_arg(s: str | None, fallback: date) -> date:
         return date.fromisoformat(s)
     except ValueError:
         return fallback
+
+
+def next_scheduled_draw(lotto_type: str, last_draw: date) -> date:
+    dow = last_draw.weekday()  # Mon=0
+    if lotto_type in {"CA", "FL"}:
+        days = {0: 2, 1: 1, 2: 3, 3: 2, 4: 1, 5: 4, 6: 3}
+    elif lotto_type == "MM":
+        days = {0: 1, 1: 3, 2: 2, 3: 1, 4: 4, 5: 3, 6: 2}
+    else:
+        days = {0: 2, 1: 1, 2: 3, 3: 2, 4: 1, 5: 3, 6: 2}
+    return last_draw + timedelta(days=days[dow])
+
+
+def _ticket_numbers_from_row(row: dict) -> list[int]:
+    nums = [row["Nbr1"], row["Nbr2"], row["Nbr3"], row["Nbr4"], row["Nbr5"]]
+    if row.get("Nbr6") is not None:
+        nums.append(row["Nbr6"])
+    return nums
+
+
+def normalize_ticket_numbers(lotto_type: str, numbers: list[int]) -> list[int]:
+    rules = TICKET_GAME_RULES[lotto_type]
+    if lotto_type == "FL":
+        return sorted(numbers[:6])
+    main = sorted(numbers[:5])
+    bonus = numbers[5]
+    return main + [bonus]
+
+
+def validate_ticket_numbers(lotto_type: str, numbers: list[int]) -> tuple[bool, str]:
+    rules = TICKET_GAME_RULES[lotto_type]
+    required = 6
+    if len(numbers) != required:
+        return False, f"Exactly {required} numbers are required."
+
+    if lotto_type == "FL":
+        if len(set(numbers)) != 6:
+            return False, "Florida tickets must contain 6 distinct numbers."
+        if any(n < 1 or n > rules["main_max"] for n in numbers):
+            return False, f"Florida numbers must be between 1 and {rules['main_max']}."
+        return True, ""
+
+    main = numbers[:5]
+    bonus = numbers[5]
+    if len(set(main)) != 5:
+        return False, "The first 5 numbers must be distinct."
+    if any(n < 1 or n > rules["main_max"] for n in main):
+        return False, f"Main numbers must be between 1 and {rules['main_max']}."
+    if bonus < 1 or bonus > rules["bonus_max"]:
+        return False, f"The 6th number must be between 1 and {rules['bonus_max']}."
+    return True, ""
+
+
+def compare_ticket_to_draw(lotto_type: str, ticket: dict, draw: dict | None) -> dict:
+    numbers = _ticket_numbers_from_row(ticket)
+    if not draw:
+        return {
+            "status": "pending",
+            "main_matches": 0,
+            "bonus_match": False,
+            "match_label": "Pending draw",
+            "win_amount": None,
+            "win_note": "No winning numbers yet.",
+            "is_winner": False,
+        }
+
+    if lotto_type == "FL":
+        ticket_set = set(numbers[:6])
+        draw_set = set(_ticket_numbers_from_row(draw)[:6])
+        main_matches = len(ticket_set & draw_set)
+        match_label = f"{main_matches} of 6"
+        return {
+            "status": "drawn",
+            "main_matches": main_matches,
+            "bonus_match": False,
+            "match_label": match_label,
+            "win_amount": None,
+            "win_note": "Florida Lotto payout not derived locally.",
+            "is_winner": main_matches >= 3,
+        }
+
+    ticket_main = set(numbers[:5])
+    draw_numbers = _ticket_numbers_from_row(draw)
+    draw_main = set(draw_numbers[:5])
+    bonus_match = numbers[5] == draw_numbers[5]
+    main_matches = len(ticket_main & draw_main)
+    key = (main_matches, bonus_match)
+    win_amount = FIXED_PRIZE_TABLES.get(lotto_type, {}).get(key)
+
+    if lotto_type in {"CA", "MM"}:
+        note = "Match tier available; payout varies or needs multiplier."
+        if bonus_match:
+            label = f"{main_matches} + bonus"
+        else:
+            label = f"{main_matches}"
+        return {
+            "status": "drawn",
+            "main_matches": main_matches,
+            "bonus_match": bonus_match,
+            "match_label": label,
+            "win_amount": win_amount,
+            "win_note": note,
+            "is_winner": (main_matches >= 3) or bonus_match,
+        }
+
+    if bonus_match:
+        label = f"{main_matches} + bonus"
+    else:
+        label = f"{main_matches}"
+    return {
+        "status": "drawn",
+        "main_matches": main_matches,
+        "bonus_match": bonus_match,
+        "match_label": label,
+        "win_amount": win_amount,
+        "win_note": "Base prize table only. Add-ons are not included." if win_amount is not None else "No prize.",
+        "is_winner": win_amount is not None and win_amount > 0,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +277,142 @@ def logout():
 @login_required
 def home():
     return render_template("home.html")
+
+
+@app.route("/tickets")
+@login_required
+def tickets_page():
+    db_ticket_sim.purge_expired_tickets()
+    lotto_type = request.args.get("lotto", "MM")
+    if lotto_type not in LOTTO_LABELS:
+        lotto_type = "MM"
+
+    earliest_str, latest_str = db.get_date_bounds(lotto_type)
+    latest = date.fromisoformat(latest_str) if latest_str else date.today()
+    selected = parse_date_arg(request.args.get("draw_date"), next_scheduled_draw(lotto_type, latest))
+
+    return render_template(
+        "tickets.html",
+        lotto_type=lotto_type,
+        draw_date=selected.isoformat(),
+        lotto_types=list(LOTTO_LABELS.keys()),
+        lotto_labels=LOTTO_LABELS,
+        game_rules=TICKET_GAME_RULES,
+    )
+
+
+@app.route("/api/tickets")
+@login_required
+def api_tickets_get():
+    db_ticket_sim.purge_expired_tickets()
+    lotto_type = request.args.get("lotto", "MM")
+    draw_date = request.args.get("draw_date")
+    if not draw_date:
+        return jsonify({"error": "draw_date required"}), 400
+
+    tickets = db_ticket_sim.get_tickets(lotto_type, draw_date)
+    actual_draw = db.get_draw_by_date(lotto_type, draw_date)
+    compared = []
+    total_won = 0.0
+    unknown_wins = 0
+
+    for ticket in tickets:
+        result = compare_ticket_to_draw(lotto_type, ticket, actual_draw)
+        ticket["comparison"] = result
+        compared.append(ticket)
+        if result["win_amount"] is not None:
+            total_won += float(result["win_amount"])
+        elif result["is_winner"]:
+            unknown_wins += 1
+
+    return jsonify({
+        "tickets": compared,
+        "actual_draw": actual_draw,
+        "total_spent": db_ticket_sim.get_total_spent(lotto_type, draw_date),
+        "total_won": total_won,
+        "unknown_wins": unknown_wins,
+    })
+
+
+@app.route("/api/tickets", methods=["POST"])
+@login_required
+def api_tickets_add():
+    db_ticket_sim.purge_expired_tickets()
+    data = request.get_json(silent=True) or {}
+    lotto_type = (data.get("lotto") or "MM").strip()
+    draw_date = (data.get("draw_date") or "").strip()
+    numbers = data.get("numbers") or []
+    price = float(data.get("price") or 0)
+
+    if lotto_type not in LOTTO_LABELS:
+        return jsonify({"error": "Invalid lotto type"}), 400
+    if not draw_date:
+        return jsonify({"error": "draw_date required"}), 400
+    try:
+        date.fromisoformat(draw_date)
+    except ValueError:
+        return jsonify({"error": "Invalid draw date"}), 400
+
+    try:
+        parsed = [int(n) for n in numbers]
+    except (TypeError, ValueError):
+        return jsonify({"error": "Numbers must be integers"}), 400
+
+    parsed = normalize_ticket_numbers(lotto_type, parsed)
+    ok, msg = validate_ticket_numbers(lotto_type, parsed)
+    if not ok:
+        return jsonify({"error": msg}), 400
+
+    ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, parsed)
+    return jsonify({"id": ticket_id}), 201
+
+
+@app.route("/api/tickets/permutations", methods=["POST"])
+@login_required
+def api_tickets_permutations():
+    db_ticket_sim.purge_expired_tickets()
+    data = request.get_json(silent=True) or {}
+    lotto_type = (data.get("lotto") or "MM").strip()
+    draw_date = (data.get("draw_date") or "").strip()
+    buckets = data.get("buckets") or []
+    price = float(data.get("price") or 0)
+
+    if lotto_type not in LOTTO_LABELS:
+        return jsonify({"error": "Invalid lotto type"}), 400
+    if not draw_date:
+        return jsonify({"error": "draw_date required"}), 400
+    if len(buckets) != 6:
+        return jsonify({"error": "Six position buckets are required"}), 400
+
+    parsed_buckets = []
+    try:
+        for bucket in buckets:
+            values = [int(v) for v in bucket]
+            if not values:
+                return jsonify({"error": "Each position needs at least one number"}), 400
+            parsed_buckets.append(values)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Permutation values must be integers"}), 400
+
+    saved = 0
+    invalid = 0
+    for combo in product(*parsed_buckets):
+        ticket = normalize_ticket_numbers(lotto_type, list(combo))
+        ok, _ = validate_ticket_numbers(lotto_type, ticket)
+        if not ok:
+            invalid += 1
+            continue
+        db_ticket_sim.add_ticket(lotto_type, draw_date, price, ticket)
+        saved += 1
+
+    return jsonify({"saved": saved, "invalid": invalid}), 201
+
+
+@app.route("/api/tickets/<int:ticket_id>", methods=["DELETE"])
+@login_required
+def api_tickets_delete(ticket_id):
+    db_ticket_sim.delete_ticket(ticket_id)
+    return jsonify({"deleted": ticket_id})
 
 
 # ---------------------------------------------------------------------------
@@ -629,6 +920,8 @@ if __name__ == "__main__":
 
     # Links
     db_links.init_links_schema()
+    db_ticket_sim.init_ticket_schema()
+    db_ticket_sim.purge_expired_tickets()
 
     scraper.start_background_scraper()
     app.run(debug=True, host="0.0.0.0", port=5000)

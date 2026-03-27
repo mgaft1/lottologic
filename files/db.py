@@ -145,6 +145,16 @@ def get_draw_by_index(lotto_type: str, draw_index: int):
     return dict(row) if row else None
 
 
+def get_draw_by_date(lotto_type: str, draw_date: str):
+    with _conn() as con:
+        row = con.execute(
+            """SELECT DrawIndex,DrawDate,Nbr1,Nbr2,Nbr3,Nbr4,Nbr5,Nbr6
+               FROM DrawHistory WHERE LottoType=? AND DrawDate=?""",
+            (lotto_type, draw_date),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def get_index_range(lotto_type: str) -> tuple:
     with _conn() as con:
         row = con.execute(

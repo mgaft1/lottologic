@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket Simulator</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Arial, sans-serif;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+#navbar {
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.88rem;
+}
+#navbar a { color: #89b4fa; text-decoration: none; }
+#navbar a:hover { text-decoration: underline; }
+.nav-logout { margin-left: auto; color: #f38ba8 !important; }
+#main {
+  flex: 1;
+  max-width: 1320px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 18px 20px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.panel {
+  background: #181825;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.topbar {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.field label, .section-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6c7086;
+}
+select, input[type=date], input[type=number], input[type=text] {
+  background: #313244;
+  color: #cdd6f4;
+  border: 1px solid #45475a;
+  border-radius: 5px;
+  padding: 8px 10px;
+  font-size: 0.92rem;
+  outline: none;
+}
+select:focus, input:focus { border-color: #89b4fa; }
+.btn {
+  background: #89b4fa;
+  color: #1e1e2e;
+  border: none;
+  border-radius: 5px;
+  padding: 9px 16px;
+  font-size: 0.92rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+.btn:hover { background: #74c7ec; }
+.btn-secondary {
+  background: #313244;
+  color: #cdd6f4;
+  border: 1px solid #45475a;
+}
+.btn-secondary:hover { background: #45475a; }
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 12px;
+}
+.summary-card {
+  background: #11111b;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  padding: 14px;
+}
+.summary-card .label {
+  color: #6c7086;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.summary-card .value {
+  font-size: 1.35rem;
+  font-weight: bold;
+}
+.entry-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) 120px auto;
+  gap: 8px;
+  align-items: end;
+}
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) 120px auto;
+  gap: 8px;
+  align-items: end;
+}
+.helper {
+  color: #6c7086;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ball-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ball {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.88rem;
+  font-weight: bold;
+  color: #1e1e2e;
+}
+.controls-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+th {
+  text-align: left;
+  color: #6c7086;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  border-bottom: 1px solid #313244;
+}
+td {
+  padding: 10px;
+  border-bottom: 1px solid #24243a;
+  vertical-align: top;
+}
+.ticket-numbers {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ticket-chip {
+  min-width: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #313244;
+  text-align: center;
+  font-weight: bold;
+}
+.winner-row {
+  background: rgba(166, 227, 161, 0.12);
+}
+.winner-row td {
+  border-bottom-color: rgba(166, 227, 161, 0.2);
+}
+.match-note {
+  color: #a6adc8;
+  font-size: 0.8rem;
+}
+.error {
+  color: #f38ba8;
+  font-size: 0.84rem;
+}
+.hidden { display: none !important; }
+@media (max-width: 1100px) {
+  .entry-grid, .perm-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .entry-grid, .perm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+</style>
+</head>
+<body>
+<div id="navbar">
+  <a href="/home">Home</a>
+  <a href="/">Viewer</a>
+  <a href="/gaps">Gap Patterns</a>
+  <a href="/links">My Links</a>
+  <a href="/logout" class="nav-logout">Sign out</a>
+</div>
+
+<div id="main">
+  <div class="panel">
+    <div class="topbar">
+      <div class="field">
+        <label for="sel-lotto">Lotto Type</label>
+        <select id="sel-lotto">
+          {% for lt in lotto_types %}
+          <option value="{{ lt }}" {% if lt == lotto_type %}selected{% endif %}>{{ lotto_labels.get(lt, lt) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="draw-date">Draw Date</label>
+        <input type="date" id="draw-date" value="{{ draw_date }}">
+      </div>
+      <button class="btn" id="btn-load">Load</button>
+      <div class="helper">Temporary ticket storage is kept for 7 days after the draw date, then deleted automatically.</div>
+    </div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="label">Tickets</div>
+      <div class="value" id="sum-count">0</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Total Spent</div>
+      <div class="value" id="sum-spent">$0.00</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Known Winnings</div>
+      <div class="value" id="sum-won">$0.00</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Net</div>
+      <div class="value" id="sum-net">$0.00</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-head">
+      <div class="section-title">Manual Ticket Entry</div>
+    </div>
+    <div class="entry-grid">
+      <div class="field"><label>Set 1</label><input type="number" id="m1"></div>
+      <div class="field"><label>Set 2</label><input type="number" id="m2"></div>
+      <div class="field"><label>Set 3</label><input type="number" id="m3"></div>
+      <div class="field"><label>Set 4</label><input type="number" id="m4"></div>
+      <div class="field"><label>Set 5</label><input type="number" id="m5"></div>
+      <div class="field"><label>Set 6</label><input type="number" id="m6"></div>
+      <div class="field"><label>Price</label><input type="number" id="ticket-price" min="0" step="0.01"></div>
+      <button class="btn" id="btn-save-ticket">Save Ticket</button>
+    </div>
+    <div class="error hidden" id="manual-error"></div>
+  </div>
+
+  <div class="panel">
+    <div class="section-head">
+      <div class="section-title">Permutation Builder</div>
+    </div>
+    <div class="perm-grid">
+      <div class="field"><label>Set 1</label><input type="text" id="p1" placeholder="1"></div>
+      <div class="field"><label>Set 2</label><input type="text" id="p2" placeholder="6"></div>
+      <div class="field"><label>Set 3</label><input type="text" id="p3" placeholder="15"></div>
+      <div class="field"><label>Set 4</label><input type="text" id="p4" placeholder="30,32"></div>
+      <div class="field"><label>Set 5</label><input type="text" id="p5" placeholder="46,47"></div>
+      <div class="field"><label>Set 6</label><input type="text" id="p6" placeholder="12"></div>
+      <div class="field"><label>Price</label><input type="number" id="perm-price" min="0" step="0.01"></div>
+      <button class="btn" id="btn-generate">Generate + Save</button>
+    </div>
+    <div class="helper" style="margin-top:10px;">Use commas to enter multiple choices for any set. Every valid permutation is saved as its own ticket.</div>
+    <div class="error hidden" id="perm-error"></div>
+  </div>
+
+  <div class="panel">
+    <div class="section-head">
+      <div>
+        <div class="section-title">Winning Numbers</div>
+        <div class="helper" id="draw-status">No draw loaded yet.</div>
+      </div>
+      <div class="controls-row">
+        <button class="btn btn-secondary" id="btn-compare">Compare Against Actual Draw</button>
+      </div>
+    </div>
+    <div class="ball-row" id="actual-balls"></div>
+  </div>
+
+  <div class="panel">
+    <div class="section-head">
+      <div class="section-title">Saved Tickets</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Numbers</th>
+          <th>Price</th>
+          <th>Result</th>
+          <th>Win</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tickets-body"></tbody>
+    </table>
+  </div>
+
+  <div class="panel hidden" id="winners-panel">
+    <div class="section-head">
+      <div class="section-title">Winning Tickets</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Numbers</th>
+          <th>Match</th>
+          <th>Win</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody id="winners-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const LOTTO_LABELS = {{ lotto_labels | tojson }};
+const GAME_RULES = {{ game_rules | tojson }};
+const SET_COLORS = ["#8a2be2","#ff4500","#000080","#006400","#4b0082","#a52a2a"];
+
+let compareMode = false;
+
+function currentLotto() {
+  return document.getElementById("sel-lotto").value;
+}
+
+function currentDate() {
+  return document.getElementById("draw-date").value;
+}
+
+function formatMoney(v) {
+  return `$${Number(v || 0).toFixed(2)}`;
+}
+
+function ticketBallsHtml(row) {
+  const nums = [row.Nbr1, row.Nbr2, row.Nbr3, row.Nbr4, row.Nbr5, row.Nbr6].filter(v => v != null);
+  return nums.map((n, i) => {
+    const color = SET_COLORS[Math.min(i, SET_COLORS.length - 1)];
+    return `<span class="ticket-chip" style="background:${color};color:#fff;">${n}</span>`;
+  }).join("");
+}
+
+function actualBallsHtml(draw) {
+  if (!draw) return "";
+  const nums = [draw.Nbr1, draw.Nbr2, draw.Nbr3, draw.Nbr4, draw.Nbr5, draw.Nbr6].filter(v => v != null);
+  return nums.map((n, i) => `<span class="ball" style="background:${SET_COLORS[Math.min(i, SET_COLORS.length - 1)]};color:#fff;">${n}</span>`).join("");
+}
+
+function applyDefaultPrices() {
+  const base = GAME_RULES[currentLotto()].base_price || 0;
+  document.getElementById("ticket-price").value = base.toFixed(2);
+  document.getElementById("perm-price").value = base.toFixed(2);
+}
+
+function parseManualNumbers() {
+  return [1,2,3,4,5,6].map(i => Number(document.getElementById(`m${i}`).value));
+}
+
+function parseBucketValues(value) {
+  return value
+    .split(",")
+    .map(v => v.trim())
+    .filter(Boolean)
+    .map(v => Number(v));
+}
+
+async function loadTickets() {
+  const r = await fetch(`/api/tickets?lotto=${currentLotto()}&draw_date=${currentDate()}`);
+  const data = await r.json();
+  renderTickets(data);
+}
+
+function renderTickets(data) {
+  const body = document.getElementById("tickets-body");
+  const winnersBody = document.getElementById("winners-body");
+  const winnersPanel = document.getElementById("winners-panel");
+  body.innerHTML = "";
+  winnersBody.innerHTML = "";
+
+  document.getElementById("sum-count").textContent = String(data.tickets.length);
+  document.getElementById("sum-spent").textContent = formatMoney(data.total_spent);
+  document.getElementById("sum-won").textContent = formatMoney(data.total_won);
+  document.getElementById("sum-net").textContent = formatMoney((data.total_won || 0) - (data.total_spent || 0));
+
+  document.getElementById("actual-balls").innerHTML = actualBallsHtml(data.actual_draw);
+  document.getElementById("draw-status").textContent = data.actual_draw
+    ? `${LOTTO_LABELS[currentLotto()]} winning numbers for ${currentDate()}`
+    : `No actual draw is stored yet for ${currentDate()}.`;
+
+  const winners = [];
+  for (const row of data.tickets) {
+    const cmp = row.comparison || {};
+    const tr = document.createElement("tr");
+    if (compareMode && cmp.is_winner) tr.className = "winner-row";
+    tr.innerHTML = `
+      <td>${row.Id}</td>
+      <td><div class="ticket-numbers">${ticketBallsHtml(row)}</div></td>
+      <td>${formatMoney(row.TicketPrice)}</td>
+      <td>${compareMode ? (cmp.match_label || "-") : "-"}</td>
+      <td>${compareMode ? (cmp.win_amount != null ? formatMoney(cmp.win_amount) : (cmp.is_winner ? "TBD" : "-")) : "-"}</td>
+      <td><button class="btn btn-secondary" data-delete="${row.Id}">Delete</button></td>
+    `;
+    body.appendChild(tr);
+    if (compareMode && cmp.is_winner) winners.push(row);
+  }
+
+  winnersPanel.classList.toggle("hidden", !compareMode || winners.length === 0);
+  for (const row of winners) {
+    const cmp = row.comparison || {};
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.Id}</td>
+      <td><div class="ticket-numbers">${ticketBallsHtml(row)}</div></td>
+      <td>${cmp.match_label || "-"}</td>
+      <td>${cmp.win_amount != null ? formatMoney(cmp.win_amount) : "TBD"}</td>
+      <td class="match-note">${cmp.win_note || ""}</td>
+    `;
+    winnersBody.appendChild(tr);
+  }
+
+  document.querySelectorAll("[data-delete]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await fetch(`/api/tickets/${btn.dataset.delete}`, { method: "DELETE" });
+      await loadTickets();
+    });
+  });
+}
+
+async function saveManualTicket() {
+  const error = document.getElementById("manual-error");
+  error.classList.add("hidden");
+  const numbers = parseManualNumbers();
+  if (numbers.some(n => !Number.isFinite(n))) {
+    error.textContent = "Fill in all 6 number boxes.";
+    error.classList.remove("hidden");
+    return;
+  }
+  const r = await fetch("/api/tickets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      lotto: currentLotto(),
+      draw_date: currentDate(),
+      numbers,
+      price: Number(document.getElementById("ticket-price").value || 0),
+    })
+  });
+  const data = await r.json();
+  if (!r.ok) {
+    error.textContent = data.error || "Could not save ticket.";
+    error.classList.remove("hidden");
+    return;
+  }
+  [1,2,3,4,5,6].forEach(i => document.getElementById(`m${i}`).value = "");
+  await loadTickets();
+}
+
+async function savePermutations() {
+  const error = document.getElementById("perm-error");
+  error.classList.add("hidden");
+  const buckets = [1,2,3,4,5,6].map(i => parseBucketValues(document.getElementById(`p${i}`).value));
+  if (buckets.some(b => !b.length || b.some(n => !Number.isFinite(n)))) {
+    error.textContent = "Each permutation field needs one or more comma-separated numbers.";
+    error.classList.remove("hidden");
+    return;
+  }
+  const r = await fetch("/api/tickets/permutations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      lotto: currentLotto(),
+      draw_date: currentDate(),
+      buckets,
+      price: Number(document.getElementById("perm-price").value || 0),
+    })
+  });
+  const data = await r.json();
+  if (!r.ok) {
+    error.textContent = data.error || "Could not generate tickets.";
+    error.classList.remove("hidden");
+    return;
+  }
+  error.textContent = `Saved ${data.saved} tickets${data.invalid ? `, skipped ${data.invalid} invalid permutation(s)` : ""}.`;
+  error.classList.remove("hidden");
+  await loadTickets();
+}
+
+document.getElementById("btn-save-ticket").addEventListener("click", saveManualTicket);
+document.getElementById("btn-generate").addEventListener("click", savePermutations);
+document.getElementById("btn-compare").addEventListener("click", async () => {
+  compareMode = true;
+  await loadTickets();
+});
+document.getElementById("btn-load").addEventListener("click", () => {
+  const q = new URLSearchParams({ lotto: currentLotto(), draw_date: currentDate() });
+  window.location.href = `/tickets?${q.toString()}`;
+});
+document.getElementById("sel-lotto").addEventListener("change", applyDefaultPrices);
+
+applyDefaultPrices();
+loadTickets();
+</script>
+</body>
+</html>

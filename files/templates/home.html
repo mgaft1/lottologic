@@ -3,58 +3,341 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Home</title>
+<title>Lottologic Home</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #eef3fb;
+  --panel: rgba(255, 255, 255, 0.84);
+  --panel-strong: rgba(255, 255, 255, 0.94);
+  --ink: #10233f;
+  --muted: #5f7088;
+  --line: rgba(16, 35, 63, 0.12);
+  --accent: #1d5eff;
+  --accent-soft: rgba(29, 94, 255, 0.12);
+  --accent-2: #10a5b5;
+  --shadow: 0 28px 80px rgba(31, 53, 92, 0.16);
+}
+
 body {
-  font-family: Arial, sans-serif;
-  background: #1e1e2e;
-  color: #cdd6f4;
-  height: 100vh;
+  min-height: 100vh;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(29, 94, 255, 0.18), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(16, 165, 181, 0.18), transparent 26%),
+    linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+}
+
+.shell {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
+
 #navbar {
-  background: #181825;
-  border-bottom: 1px solid #313244;
-  padding: 8px 20px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  font-size: 0.88rem;
+  gap: 24px;
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(14px);
 }
-#navbar a {
-  color: #89b4fa;
+
+.brand {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.nav-links a,
+.logout {
+  color: var(--muted);
   text-decoration: none;
+  font-size: 0.98rem;
+  font-weight: 600;
 }
-#navbar a:hover { text-decoration: underline; }
-#navbar .logout {
+
+.nav-links a:hover,
+.logout:hover {
+  color: var(--accent);
+}
+
+.logout {
   margin-left: auto;
-  color: #f38ba8;
 }
+
 #content {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 48px 24px;
+}
+
+.hero {
+  width: min(980px, 100%);
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 28px;
+  align-items: stretch;
+}
+
+.intro,
+.actions {
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.intro {
+  padding: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.intro h1 {
+  font-size: clamp(2.6rem, 5vw, 4.2rem);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+}
+
+.intro p {
+  max-width: 34rem;
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.65;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.stat {
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  min-width: 132px;
+}
+
+.stat strong {
+  display: block;
+  font-size: 1.12rem;
+  margin-bottom: 4px;
+}
+
+.stat span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.actions {
+  padding: 28px;
+  display: flex;
   flex-direction: column;
   gap: 16px;
-  color: #6c7086;
+}
+
+.actions-header h2 {
+  font-size: 1.38rem;
+  margin-bottom: 6px;
+}
+
+.actions-header p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.action-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 22px;
+  border-radius: 22px;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.action-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(29, 94, 255, 0.24);
+  box-shadow: 0 18px 36px rgba(31, 53, 92, 0.12);
+}
+
+.action-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.action-kicker {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.action-arrow {
+  color: var(--accent);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.action-card h3 {
+  font-size: 1.24rem;
+}
+
+.action-card p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+@media (max-width: 860px) {
+  #navbar {
+    flex-wrap: wrap;
+    gap: 12px 18px;
+    padding: 18px 20px;
+  }
+
+  .logout {
+    margin-left: 0;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .intro,
+  .actions {
+    padding: 28px;
+  }
 }
 </style>
 </head>
 <body>
-<div id="navbar">
-  <a href="/">Lotto Viewer</a>
-  <a href="/gaps">Gap Patterns</a>
-  <a href="/links">My Links</a>
-  <a href="/logout" class="logout">Sign out</a>
-</div>
-<div id="content">
-  <span style="font-size:1.1rem;color:#a6adc8;">Home</span>
-  <a href="/" style="color:#89b4fa;font-size:0.9rem;">→ Lotto Viewer</a>
-  <a href="/gaps" style="color:#89b4fa;font-size:0.9rem;">→ Gap Patterns</a>
-  <a href="/links" style="color:#89b4fa;font-size:0.9rem;">→ My Links</a>
+<div class="shell">
+  <div id="navbar">
+    <div class="brand">Lottologic</div>
+    <div class="nav-links">
+      <a href="/">Viewer</a>
+      <a href="/gaps">Gap Patterns</a>
+      <a href="/tickets">Ticket Simulator</a>
+      <a href="/links">My Links</a>
+    </div>
+    <a href="/logout" class="logout">Sign out</a>
+  </div>
+
+  <div id="content">
+    <div class="hero">
+      <section class="intro">
+        <span class="eyebrow">Analysis Workspace</span>
+        <h1>Lottery tracking, forecasts, and visual pattern work in one place.</h1>
+        <p>
+          Use the viewer to inspect draw history, compare movement across sets,
+          explore gap behavior, and keep your saved research links organized.
+        </p>
+
+        <div class="stats">
+          <div class="stat">
+            <strong>Viewer</strong>
+            <span>Interactive chart analysis</span>
+          </div>
+          <div class="stat">
+            <strong>Gaps</strong>
+            <span>Pattern comparison tools</span>
+          </div>
+          <div class="stat">
+            <strong>Links</strong>
+            <span>Saved research references</span>
+          </div>
+          <div class="stat">
+            <strong>Tickets</strong>
+            <span>Purchase simulation</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="actions">
+        <div class="actions-header">
+          <h2>Open a workspace</h2>
+          <p>Jump directly into the part of the app you want to use right now.</p>
+        </div>
+
+        <a class="action-card" href="/">
+          <div class="action-top">
+            <span class="action-kicker">Main Tool</span>
+            <span class="action-arrow">→</span>
+          </div>
+          <h3>Lotto Viewer</h3>
+          <p>Browse draw history, fit curves, compare sets, and inspect the latest results.</p>
+        </a>
+
+        <a class="action-card" href="/gaps">
+          <div class="action-top">
+            <span class="action-kicker">Patterns</span>
+            <span class="action-arrow">→</span>
+          </div>
+          <h3>Gap Patterns</h3>
+          <p>Search recurring spacing behavior and study how number gaps line up over time.</p>
+        </a>
+
+        <a class="action-card" href="/links">
+          <div class="action-top">
+            <span class="action-kicker">Research</span>
+            <span class="action-arrow">→</span>
+          </div>
+          <h3>My Links</h3>
+          <p>Keep useful videos and related references close to the rest of your workflow.</p>
+        </a>
+
+        <a class="action-card" href="/tickets">
+          <div class="action-top">
+            <span class="action-kicker">Simulation</span>
+            <span class="action-arrow">→</span>
+          </div>
+          <h3>Ticket Simulator</h3>
+          <p>Record proposed tickets, total the spend, and compare them against actual draw results.</p>
+        </a>
+      </section>
+    </div>
+  </div>
 </div>
 </body>
 </html>

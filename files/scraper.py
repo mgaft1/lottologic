@@ -461,6 +461,7 @@ def _scrape_year_only(lotto_type: str, base: str, parser, existing: set[str]) ->
 # ── Background worker ────────────────────────────────────
 
 _stop_event = threading.Event()
+_scraper_thread = None
 
 
 def _worker():
@@ -481,8 +482,13 @@ def _worker():
 
 def start_background_scraper():
     """Launch daemon scraper thread. Returns immediately."""
-    t = threading.Thread(target=_worker, name='lotto-scraper', daemon=True)
-    t.start()
+    global _scraper_thread
+    if _scraper_thread and _scraper_thread.is_alive():
+        logger.info("Background scraper already running")
+        return
+    _stop_event.clear()
+    _scraper_thread = threading.Thread(target=_worker, name='lotto-scraper', daemon=True)
+    _scraper_thread.start()
     logger.info("Background scraper started")
 
 

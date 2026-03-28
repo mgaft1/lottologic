@@ -22,6 +22,12 @@ import os
 
 
 def _resolve_db_path() -> str:
+    if os.environ.get("LOTTO_DB"):
+        return os.environ["LOTTO_DB"]
+    if os.environ.get("LOTTO_DB_DIR"):
+        return str(Path(os.environ["LOTTO_DB_DIR"]) / "lotto.db")
+    if os.environ.get("RENDER_DISK_PATH"):
+        return str(Path(os.environ["RENDER_DISK_PATH"]) / "lotto.db")
     here = Path(__file__).parent
     candidates = [
         here / "lotto.db",
@@ -38,6 +44,7 @@ DB_PATH = os.environ.get("LOTTO_DB", _resolve_db_path())
 
 @contextmanager
 def _conn():
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")

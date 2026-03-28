@@ -12,7 +12,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-DB_PATH = os.environ.get("LOTTO_DB", str(Path(__file__).parent.parent / "data" / "lotto.db"))
+def _resolve_db_path() -> str:
+    if os.environ.get("LOTTO_DB"):
+        return os.environ["LOTTO_DB"]
+    if os.environ.get("LOTTO_DB_DIR"):
+        return str(Path(os.environ["LOTTO_DB_DIR"]) / "lotto.db")
+    if os.environ.get("RENDER_DISK_PATH"):
+        return str(Path(os.environ["RENDER_DISK_PATH"]) / "lotto.db")
+    return str(Path(__file__).resolve().parent.parent / "data" / "lotto.db")
+
+
+DB_PATH = _resolve_db_path()
 
 MAX_LINKS = 100
 
@@ -21,6 +31,7 @@ VALID_CATEGORIES = {"music", "cooking", "baking"}
 
 @contextmanager
 def _conn():
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")

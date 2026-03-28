@@ -8,6 +8,7 @@ Background scraper fills missing draws; never blocks rendering.
 import logging
 import os
 import sys
+import threading
 from itertools import product
 from datetime import date, timedelta
 from pathlib import Path
@@ -35,6 +36,8 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("LOTTO_SECRET", "change-me-in-production-32chars!!")
 db_ticket_sim.init_ticket_schema()
 db_ticket_sim.purge_expired_tickets()
+_runtime_init_lock = threading.Lock()
+_runtime_initialized = False
 
 # ---------------------------------------------------------------------------
 # Credentials  (set via environment variables; fallback for dev only)
@@ -899,31 +902,45 @@ def _populate_selections() -> None:
             logger.warning("%s Stage 3: no combos generated for %s", lt, last_date)
 
 
+def initialize_runtime() -> None:
+    global _runtime_initialized
+    with _runtime_init_lock:
+        if _runtime_initialized:
+            return
+
+        logger.info("Using lotto DB at %s", db.DB_PATH)
+
+        xlsx = Path(__file__).resolve().parent.parent / "data" / "Lotto.xlsx"
+        if not Path(db.DB_PATH).exists():
+            logger.info("Initialising database...")
+            db.init_db()
+            if xlsx.exists():
+                summary = db.ingest_xlsx(str(xlsx))
+                logger.info("Ingested: %s", summary)
+            else:
+                logger.warning("Seed workbook not found at %s", xlsx)
+
+        db_forecast.init_forecast_schema()
+        _backfill_missing()
+
+        db_selection.init_selection_schema()
+        _populate_selections()
+
+        db_links.init_links_schema()
+        db_ticket_sim.init_ticket_schema()
+        db_ticket_sim.purge_expired_tickets()
+
+        if os.environ.get("LOTTO_BACKGROUND_SCRAPER", "1") == "1":
+            scraper.start_background_scraper()
+
+        _runtime_initialized = True
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
+initialize_runtime()
+
 if __name__ == "__main__":
-    xlsx = Path(__file__).parent.parent / "data" / "Lotto.xlsx"
-    if not Path(db.DB_PATH).exists():
-        logger.info("Initialising database...")
-        db.init_db()
-        summary = db.ingest_xlsx(str(xlsx))
-        logger.info("Ingested: %s", summary)
-
-    # Stage 2: ensure ForecastPredictions table exists, then backfill any
-    # lotto types that have no forecast rows yet.
-    db_forecast.init_forecast_schema()
-    _backfill_missing()
-
-    # Stage 3
-    db_selection.init_selection_schema()
-    _populate_selections()
-
-    # Links
-    db_links.init_links_schema()
-    db_ticket_sim.init_ticket_schema()
-    db_ticket_sim.purge_expired_tickets()
-
-    scraper.start_background_scraper()
     app.run(debug=True, host="0.0.0.0", port=5000)

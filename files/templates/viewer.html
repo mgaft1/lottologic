@@ -655,7 +655,7 @@ function render() {
     const y = yOfValue(v, minV, maxV);
     if (y < PAD.top - 1 || y > PAD.top + pH() + 1) continue;
     // Gridline
-    ctx2d.strokeStyle = "#999999"; ctx2d.lineWidth = 0.8;
+    ctx2d.strokeStyle = "#707070"; ctx2d.lineWidth = 1;
     ctx2d.beginPath(); ctx2d.moveTo(PAD.left, y); ctx2d.lineTo(PAD.left + pW(), y); ctx2d.stroke();
     // Label on RIGHT
     ctx2d.fillStyle = "#000000";
@@ -666,7 +666,7 @@ function render() {
   const labelStep = Math.max(1, Math.floor(draws.length / 6));
   for (let i = 0; i < draws.length; i++) {
     const x = xOfDate(draws[i].DrawDate);
-    ctx2d.strokeStyle = "#999999"; ctx2d.lineWidth = 0.8;
+    ctx2d.strokeStyle = "#707070"; ctx2d.lineWidth = 1;
     ctx2d.beginPath(); ctx2d.moveTo(x, PAD.top); ctx2d.lineTo(x, PAD.top + pH()); ctx2d.stroke();
   }
   ctx2d.fillStyle = "#000000"; ctx2d.font = "bold 22px Arial"; ctx2d.textAlign = "center";
@@ -904,14 +904,25 @@ function drawHighlight() {
   if (v == null) return;
   const x = xOfDate(_hlDraw.DrawDate);
   const y = yOfValue(v, minV, maxV);
-  const r = 18;
-  // Offset circle up and to the left so cursor doesn't cover the number.
-  // If the point is too close to the top edge, flip the badge below it.
-  const cx = x - 26;
-  let cy = y - 26;
-  if (cy - r < PAD.top + 2) {
-    cy = y + 26;
+  const r = 23;
+  const bubbleOffset = 32;
+  const minX = PAD.left + r + 2;
+  const maxX = canvas.width - PAD.right - r - 2;
+  const minY = PAD.top + r + 2;
+  const maxY = canvas.height - PAD.bottom - r - 2;
+  // Offset circle up and to the left so the clicked point stays visible.
+  // If the point is too close to the top or left edge, flip the badge
+  // below or to the right so it remains fully visible.
+  let cx = x - bubbleOffset;
+  let cy = y - bubbleOffset;
+  if (cy < minY) {
+    cy = y + bubbleOffset;
   }
+  if (cx < minX) {
+    cx = x + bubbleOffset;
+  }
+  cx = Math.max(minX, Math.min(maxX, cx));
+  cy = Math.max(minY, Math.min(maxY, cy));
   // Filled circle
   ctx2d.beginPath();
   ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
@@ -923,7 +934,7 @@ function drawHighlight() {
   ctx2d.stroke();
   // Number inside
   ctx2d.fillStyle = "#ffffff";
-  ctx2d.font = "bold 13px Arial";
+  ctx2d.font = "bold 17px Arial";
   ctx2d.textAlign = "center";
   ctx2d.textBaseline = "middle";
   ctx2d.fillText(String(v), cx, cy);

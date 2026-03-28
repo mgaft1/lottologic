@@ -12,8 +12,10 @@ from itertools import product
 from datetime import date, timedelta
 from pathlib import Path
 
-# db_forecast and forecast live in ../data/ relative to this file (files/app.py)
-sys.path.insert(0, str(Path(__file__).parent.parent / "data"))
+# db_forecast and forecast live in ../data/ relative to this file (files/app.py).
+# Resolve the path so local launches like `py app.py` don't accidentally
+# look for a non-existent `files\\data` folder.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data"))
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import db

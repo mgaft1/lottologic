@@ -512,7 +512,10 @@ async function savePermutations() {
     error.classList.remove("hidden");
     return;
   }
-  error.textContent = `Saved ${data.saved} tickets${data.invalid ? `, skipped ${data.invalid} invalid permutation(s)` : ""}.`;
+  const notes = [];
+  if (data.invalid) notes.push(`skipped ${data.invalid} invalid permutation(s)`);
+  if (data.duplicates) notes.push(`skipped ${data.duplicates} duplicate ticket(s)`);
+  error.textContent = `Saved ${data.saved} tickets${notes.length ? `, ${notes.join(", ")}` : ""}.`;
   error.classList.remove("hidden");
   await loadTickets();
 }

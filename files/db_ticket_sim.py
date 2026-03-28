@@ -70,7 +70,39 @@ def purge_expired_tickets() -> int:
         return int(cur.rowcount or 0)
 
 
-def add_ticket(lotto_type: str, draw_date: str, price: float, numbers: list[int]) -> int:
+def ticket_exists(lotto_type: str, draw_date: str, numbers: list[int]) -> bool:
+    with _conn() as con:
+        row = con.execute(
+            """
+            SELECT 1
+            FROM TicketSimSelections
+            WHERE LottoType = ?
+              AND DrawDate = ?
+              AND Nbr1 = ?
+              AND Nbr2 = ?
+              AND Nbr3 = ?
+              AND Nbr4 = ?
+              AND Nbr5 = ?
+              AND COALESCE(Nbr6, -1) = COALESCE(?, -1)
+            LIMIT 1
+            """,
+            (
+                lotto_type,
+                draw_date,
+                numbers[0],
+                numbers[1],
+                numbers[2],
+                numbers[3],
+                numbers[4],
+                numbers[5] if len(numbers) > 5 else None,
+            ),
+        ).fetchone()
+    return row is not None
+
+
+def add_ticket(lotto_type: str, draw_date: str, price: float, numbers: list[int]) -> int | None:
+    if ticket_exists(lotto_type, draw_date, numbers):
+        return None
     with _conn() as con:
         cur = con.execute(
             """

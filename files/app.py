@@ -200,17 +200,16 @@ def validate_ticket_numbers(lotto_type: str, numbers: list[int]) -> tuple[bool, 
     if len(numbers) != required:
         return False, f"Exactly {required} numbers are required."
 
+    if len(set(numbers)) != len(numbers):
+        return False, "Ticket numbers must all be different."
+
     if lotto_type == "FL":
-        if len(set(numbers)) != 6:
-            return False, "Florida tickets must contain 6 distinct numbers."
         if any(n < 1 or n > rules["main_max"] for n in numbers):
             return False, f"Florida numbers must be between 1 and {rules['main_max']}."
         return True, ""
 
     main = numbers[:5]
     bonus = numbers[5]
-    if len(set(main)) != 5:
-        return False, "The first 5 numbers must be distinct."
     if any(n < 1 or n > rules["main_max"] for n in main):
         return False, f"Main numbers must be between 1 and {rules['main_max']}."
     if bonus < 1 or bonus > rules["bonus_max"]:
@@ -399,6 +398,8 @@ def api_tickets_add():
         return jsonify({"error": msg}), 400
 
     ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, parsed)
+    if ticket_id is None:
+        return jsonify({"error": "This exact ticket is already saved for that lotto and draw date."}), 409
     return jsonify({"id": ticket_id}), 201
 
 
@@ -431,16 +432,26 @@ def api_tickets_permutations():
 
     saved = 0
     invalid = 0
+    duplicates = 0
+    seen_batch = set()
     for combo in product(*parsed_buckets):
         ticket = normalize_ticket_numbers(lotto_type, list(combo))
         ok, _ = validate_ticket_numbers(lotto_type, ticket)
         if not ok:
             invalid += 1
             continue
-        db_ticket_sim.add_ticket(lotto_type, draw_date, price, ticket)
+        key = tuple(ticket)
+        if key in seen_batch:
+            duplicates += 1
+            continue
+        seen_batch.add(key)
+        ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, ticket)
+        if ticket_id is None:
+            duplicates += 1
+            continue
         saved += 1
 
-    return jsonify({"saved": saved, "invalid": invalid}), 201
+    return jsonify({"saved": saved, "invalid": invalid, "duplicates": duplicates}), 201
 
 
 @app.route("/api/tickets/<int:ticket_id>", methods=["DELETE"])

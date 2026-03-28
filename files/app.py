@@ -10,8 +10,9 @@ import os
 import sys
 import threading
 from itertools import product
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 # db_forecast and forecast live in ../data/ relative to this file (files/app.py).
 # Resolve the path so local launches like `py app.py` don't accidentally
@@ -112,6 +113,9 @@ FIXED_PRIZE_TABLES = {
     },
 }
 
+APP_TIMEZONE = ZoneInfo(os.environ.get("LOTTO_TIMEZONE", "America/Los_Angeles"))
+TICKET_CUTOFF_TIME = time(19, 45)
+
 
 # ---------------------------------------------------------------------------
 # Window helpers
@@ -146,6 +150,23 @@ def next_scheduled_draw(lotto_type: str, last_draw: date) -> date:
     else:
         days = {0: 2, 1: 1, 2: 3, 3: 2, 4: 1, 5: 3, 6: 2}
     return last_draw + timedelta(days=days[dow])
+
+
+def is_draw_day(lotto_type: str, target: date) -> bool:
+    dow = target.weekday()  # Mon=0
+    if lotto_type in {"CA", "FL"}:
+        return dow in {2, 5}  # Wed, Sat
+    if lotto_type == "MM":
+        return dow in {1, 4}  # Tue, Fri
+    return dow in {0, 2, 5}   # PB, PD: Mon, Wed, Sat
+
+
+def default_ticket_draw_date(lotto_type: str, latest_draw: date) -> date:
+    now_local = datetime.now(APP_TIMEZONE)
+    today = now_local.date()
+    if today > latest_draw and is_draw_day(lotto_type, today) and now_local.time() < TICKET_CUTOFF_TIME:
+        return today
+    return next_scheduled_draw(lotto_type, latest_draw)
 
 
 def _ticket_numbers_from_row(row: dict) -> list[int]:
@@ -294,7 +315,7 @@ def tickets_page():
 
     earliest_str, latest_str = db.get_date_bounds(lotto_type)
     latest = date.fromisoformat(latest_str) if latest_str else date.today()
-    selected = parse_date_arg(request.args.get("draw_date"), next_scheduled_draw(lotto_type, latest))
+    selected = parse_date_arg(request.args.get("draw_date"), default_ticket_draw_date(lotto_type, latest))
 
     return render_template(
         "tickets.html",

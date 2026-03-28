@@ -505,10 +505,10 @@ function pH() { return canvas.height - PAD.top  - PAD.bottom; }
 
 // Map a draw to an X pixel by its position index (equal spacing).
 // S._dateIndexMap is built at render time: dateStr -> position index (0-based).
-// One extra slot is reserved at the right for the "future draw" space.
+// Two extra slots are reserved at the right for future-draw space.
 function xOfDate(dateStr) {
   const map   = S._dateIndexMap;
-  const total = S._drawCount + 1;   // +1 for future space
+  const total = S._drawCount + 2;   // +2 for future space
   if (!map || total <= 1) return PAD.left;
   const i = (map[dateStr] !== undefined) ? map[dateStr] : total - 1;
   return PAD.left + (i / (total - 1)) * pW();
@@ -662,12 +662,21 @@ function render() {
     ctx2d.fillText(v, PAD.left + pW() + 4, y + 3);
   }
 
-  // X vertical line for every draw; date labels at ~6 evenly spaced intervals
+  // X vertical line for every draw plus two future-draw slots;
+  // date labels remain only on actual draw dates.
   const labelStep = Math.max(1, Math.floor(draws.length / 6));
   for (let i = 0; i < draws.length; i++) {
     const x = xOfDate(draws[i].DrawDate);
     ctx2d.strokeStyle = "#707070"; ctx2d.lineWidth = 1;
     ctx2d.beginPath(); ctx2d.moveTo(x, PAD.top); ctx2d.lineTo(x, PAD.top + pH()); ctx2d.stroke();
+  }
+  if (S._drawCount > 0) {
+    const total = S._drawCount + 2;
+    for (let i = S._drawCount; i <= S._drawCount + 1; i++) {
+      const x = PAD.left + (i / (total - 1)) * pW();
+      ctx2d.strokeStyle = "#707070"; ctx2d.lineWidth = 1;
+      ctx2d.beginPath(); ctx2d.moveTo(x, PAD.top); ctx2d.lineTo(x, PAD.top + pH()); ctx2d.stroke();
+    }
   }
   ctx2d.fillStyle = "#000000"; ctx2d.font = "bold 22px Arial"; ctx2d.textAlign = "center";
   for (let i = 0; i < draws.length; i += labelStep) {

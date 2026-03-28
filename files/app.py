@@ -12,7 +12,7 @@ import threading
 from itertools import product
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # db_forecast and forecast live in ../data/ relative to this file (files/app.py).
 # Resolve the path so local launches like `py app.py` don't accidentally
@@ -113,7 +113,16 @@ FIXED_PRIZE_TABLES = {
     },
 }
 
-APP_TIMEZONE = ZoneInfo(os.environ.get("LOTTO_TIMEZONE", "America/Los_Angeles"))
+def _resolve_app_timezone():
+    tz_name = os.environ.get("LOTTO_TIMEZONE", "America/Los_Angeles")
+    try:
+        return ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        logger.warning("Time zone %s not found; falling back to local system time", tz_name)
+        return None
+
+
+APP_TIMEZONE = _resolve_app_timezone()
 TICKET_CUTOFF_TIME = time(19, 45)
 
 
@@ -162,7 +171,7 @@ def is_draw_day(lotto_type: str, target: date) -> bool:
 
 
 def default_ticket_draw_date(lotto_type: str, latest_draw: date) -> date:
-    now_local = datetime.now(APP_TIMEZONE)
+    now_local = datetime.now(APP_TIMEZONE) if APP_TIMEZONE else datetime.now()
     today = now_local.date()
     if today > latest_draw and is_draw_day(lotto_type, today) and now_local.time() < TICKET_CUTOFF_TIME:
         return today

@@ -527,7 +527,10 @@ document.getElementById("btn-load").addEventListener("click", () => {
   const q = new URLSearchParams({ lotto: currentLotto(), draw_date: currentDate() });
   window.location.href = `/tickets?${q.toString()}`;
 });
-document.getElementById("sel-lotto").addEventListener("change", applyDefaultPrices);
+document.getElementById("sel-lotto").addEventListener("change", () => {
+  const q = new URLSearchParams({ lotto: currentLotto() });
+  window.location.href = `/tickets?${q.toString()}`;
+});
 
 applyDefaultPrices();
 loadTickets();

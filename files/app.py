@@ -35,8 +35,6 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("LOTTO_SECRET", "change-me-in-production-32chars!!")
-db_ticket_sim.init_ticket_schema()
-db_ticket_sim.purge_expired_tickets()
 _runtime_init_lock = threading.Lock()
 _runtime_initialized = False
 
@@ -952,14 +950,15 @@ def initialize_runtime() -> None:
         logger.info("Using lotto DB at %s", db.DB_PATH)
 
         xlsx = Path(__file__).resolve().parent.parent / "data" / "Lotto.xlsx"
-        if not Path(db.DB_PATH).exists():
+        db_exists = Path(db.DB_PATH).exists()
+        if not db_exists:
             logger.info("Initialising database...")
-            db.init_db()
-            if xlsx.exists():
-                summary = db.ingest_xlsx(str(xlsx))
-                logger.info("Ingested: %s", summary)
-            else:
-                logger.warning("Seed workbook not found at %s", xlsx)
+        db.init_db()
+        if xlsx.exists():
+            summary = db.ingest_xlsx(str(xlsx))
+            logger.info("Workbook sync complete: %s", summary)
+        else:
+            logger.warning("Seed workbook not found at %s", xlsx)
 
         db_forecast.init_forecast_schema()
         _backfill_missing()

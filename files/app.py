@@ -183,6 +183,16 @@ def _ticket_numbers_from_row(row: dict) -> list[int]:
     return nums
 
 
+def _parse_purchased_flag(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "purchased"}
+    return True
+
+
 def normalize_ticket_numbers(lotto_type: str, numbers: list[int]) -> list[int]:
     rules = TICKET_GAME_RULES[lotto_type]
     if lotto_type == "FL":
@@ -352,6 +362,8 @@ def api_tickets_get():
         result = compare_ticket_to_draw(lotto_type, ticket, actual_draw)
         ticket["comparison"] = result
         compared.append(ticket)
+        if not ticket.get("Purchased"):
+            continue
         if result["win_amount"] is not None:
             total_won += float(result["win_amount"])
         elif result["is_winner"]:
@@ -375,6 +387,7 @@ def api_tickets_add():
     draw_date = (data.get("draw_date") or "").strip()
     numbers = data.get("numbers") or []
     price = float(data.get("price") or 0)
+    purchased = _parse_purchased_flag(data.get("purchased", True))
 
     if lotto_type not in LOTTO_LABELS:
         return jsonify({"error": "Invalid lotto type"}), 400
@@ -395,7 +408,7 @@ def api_tickets_add():
     if not ok:
         return jsonify({"error": msg}), 400
 
-    ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, parsed)
+    ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, parsed, purchased=purchased)
     if ticket_id is None:
         return jsonify({"error": "This exact ticket is already saved for that lotto and draw date."}), 409
     return jsonify({"id": ticket_id}), 201
@@ -410,6 +423,7 @@ def api_tickets_permutations():
     draw_date = (data.get("draw_date") or "").strip()
     buckets = data.get("buckets") or []
     price = float(data.get("price") or 0)
+    purchased = _parse_purchased_flag(data.get("purchased", True))
 
     if lotto_type not in LOTTO_LABELS:
         return jsonify({"error": "Invalid lotto type"}), 400
@@ -443,7 +457,7 @@ def api_tickets_permutations():
             duplicates += 1
             continue
         seen_batch.add(key)
-        ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, ticket)
+        ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, ticket, purchased=purchased)
         if ticket_id is None:
             duplicates += 1
             continue

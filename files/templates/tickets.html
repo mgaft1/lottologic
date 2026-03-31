@@ -20,12 +20,25 @@ body {
   padding: 8px 16px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  font-size: 0.88rem;
+  gap: 12px;
 }
-#navbar a { color: #3b6fc9; text-decoration: none; }
-#navbar a:hover { text-decoration: underline; }
-.nav-logout { margin-left: auto; color: #bf4d5d !important; }
+#navbar a { text-decoration: none; }
+#navbar a:not(.nav-logout) {
+  color: #ffffff;
+  font-size: 1.38rem;
+  font-weight: bold;
+  padding: 7px 14px;
+  background: #4488ff;
+  border: 1px solid #2266dd;
+  border-radius: 4px;
+  line-height: 1;
+}
+#navbar a:not(.nav-logout):hover { background: #3d7cf0; }
+.nav-logout {
+  margin-left: auto;
+  color: #bf4d5d !important;
+  font-size: 0.95rem;
+}
 #main {
   flex: 1;
   max-width: 1320px;
@@ -55,32 +68,39 @@ body {
   gap: 5px;
 }
 .field label, .section-title {
-  font-size: 0.78rem;
+  font-size: 1rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #646c77;
+  color: #000000;
+  font-weight: 700;
 }
 select, input[type=date], input[type=number], input[type=text] {
-  background: #eef1f4;
-  color: #30343b;
-  border: 1px solid #cfd5dc;
+  background: #ffffff;
+  color: #000000;
+  border: 2px solid #8f8f8f;
   border-radius: 5px;
   padding: 8px 10px;
-  font-size: 0.92rem;
+  font-size: 1.35rem;
+  font-weight: 700;
   outline: none;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.55);
 }
 select:focus, input:focus { border-color: #6e8fca; background:#ffffff; }
+input::placeholder {
+  color: #000000;
+  opacity: 1;
+}
 .btn {
-  background: #6f95d8;
-  color: #ffffff;
-  border: none;
+  background: #eef1f4;
+  color: #000000;
+  border: 1px solid #cfd5dc;
   border-radius: 5px;
   padding: 9px 16px;
-  font-size: 0.92rem;
-  font-weight: bold;
+  font-size: 1.35rem;
+  font-weight: 700;
   cursor: pointer;
 }
-.btn:hover { background: #5c82c4; }
+.btn:hover { background: #e2e7ec; }
 .btn-secondary {
   background: #eef1f4;
   color: #30343b;
@@ -99,11 +119,12 @@ select:focus, input:focus { border-color: #6e8fca; background:#ffffff; }
   padding: 14px;
 }
 .summary-card .label {
-  color: #646c77;
-  font-size: 0.78rem;
+  color: #000000;
+  font-size: 1rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 6px;
+  font-weight: 700;
 }
 .summary-card .value {
   font-size: 1.35rem;
@@ -111,20 +132,21 @@ select:focus, input:focus { border-color: #6e8fca; background:#ffffff; }
 }
 .entry-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr)) 120px auto;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) 180px 120px auto;
   gap: 8px;
   align-items: end;
 }
 .perm-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr)) 120px auto;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) 180px 120px auto;
   gap: 8px;
   align-items: end;
 }
 .helper {
-  color: #666f7a;
-  font-size: 0.82rem;
+  color: #000000;
+  font-size: 1rem;
   line-height: 1.5;
+  font-weight: 700;
 }
 .section-head {
   display: flex;
@@ -162,17 +184,26 @@ table {
 }
 th {
   text-align: left;
-  color: #646c77;
-  font-size: 0.76rem;
+  color: #000000;
+  font-size: 1.08rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 8px 10px;
   border-bottom: 1px solid #d7dce3;
+  font-weight: 700;
+}
+th.win-header {
+  color: #0b8a2b;
+  font-size: 1.45rem;
+  font-weight: 900;
 }
 td {
   padding: 10px;
   border-bottom: 1px solid #e4e8ed;
   vertical-align: top;
+  color: #000000;
+  font-size: 1.35rem;
+  font-weight: 700;
 }
 .ticket-numbers {
   display: flex;
@@ -180,12 +211,43 @@ td {
   flex-wrap: wrap;
 }
 .ticket-chip {
-  min-width: 28px;
-  padding: 4px 8px;
+  min-width: 38px;
+  padding: 7px 10px;
   border-radius: 999px;
   background: #eceff3;
   text-align: center;
+  font-weight: 700;
+  font-size: 1.35rem;
+}
+.ticket-status {
   font-weight: bold;
+  color: #4f5b66;
+}
+.ticket-status.optional {
+  color: #7a8794;
+}
+.win-value {
+  color: #0b8a2b;
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+.status-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: stretch;
+  justify-content: center;
+}
+.status-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: #30343b;
+}
+.status-choice input[type=radio] {
+  width: 18px;
+  height: 18px;
 }
 .winner-row {
   background: #edf7ee;
@@ -194,8 +256,9 @@ td {
   border-bottom-color: #c9dfcc;
 }
 .match-note {
-  color: #5f6974;
-  font-size: 0.8rem;
+  color: #000000;
+  font-size: 1rem;
+  font-weight: 700;
 }
 .error {
   color: #bf4d5d;
@@ -250,7 +313,7 @@ td {
       <div class="value" id="sum-spent">$0.00</div>
     </div>
     <div class="summary-card">
-      <div class="label">Known Winnings</div>
+      <div class="label">Results</div>
       <div class="value" id="sum-won">$0.00</div>
     </div>
     <div class="summary-card">
@@ -270,6 +333,13 @@ td {
       <div class="field"><label>Set 4</label><input type="number" id="m4"></div>
       <div class="field"><label>Set 5</label><input type="number" id="m5"></div>
       <div class="field"><label>Set 6</label><input type="number" id="m6"></div>
+      <div class="field">
+        <label>Status</label>
+        <div class="status-group">
+          <label class="status-choice"><input type="radio" name="manual-status" value="purchased" checked>Purchased</label>
+          <label class="status-choice"><input type="radio" name="manual-status" value="optional">Optional</label>
+        </div>
+      </div>
       <div class="field"><label>Price</label><input type="number" id="ticket-price" min="0" step="0.01"></div>
       <button class="btn" id="btn-save-ticket">Save Ticket</button>
     </div>
@@ -287,6 +357,13 @@ td {
       <div class="field"><label>Set 4</label><input type="text" id="p4" placeholder="30,32"></div>
       <div class="field"><label>Set 5</label><input type="text" id="p5" placeholder="46,47"></div>
       <div class="field"><label>Set 6</label><input type="text" id="p6" placeholder="12"></div>
+      <div class="field">
+        <label>Status</label>
+        <div class="status-group">
+          <label class="status-choice"><input type="radio" name="perm-status" value="purchased" checked>Purchased</label>
+          <label class="status-choice"><input type="radio" name="perm-status" value="optional">Optional</label>
+        </div>
+      </div>
       <div class="field"><label>Price</label><input type="number" id="perm-price" min="0" step="0.01"></div>
       <button class="btn" id="btn-generate">Generate + Save</button>
     </div>
@@ -316,9 +393,10 @@ td {
         <tr>
           <th>#</th>
           <th>Numbers</th>
+          <th>Status</th>
           <th>Price</th>
           <th>Result</th>
-          <th>Win</th>
+          <th class="win-header">Win</th>
           <th></th>
         </tr>
       </thead>
@@ -335,8 +413,9 @@ td {
         <tr>
           <th>#</th>
           <th>Numbers</th>
+          <th>Status</th>
           <th>Match</th>
-          <th>Win</th>
+          <th class="win-header">Win</th>
           <th>Note</th>
         </tr>
       </thead>
@@ -358,6 +437,16 @@ function currentLotto() {
 
 function currentDate() {
   return document.getElementById("draw-date").value;
+}
+
+function formatUsDate(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || "";
+  const [y, m, d] = dateStr.split("-");
+  return `${m}/${d}/${y}`;
+}
+
+function currentStatus(groupName) {
+  return document.querySelector(`input[name="${groupName}"]:checked`)?.value || "purchased";
 }
 
 function formatMoney(v) {
@@ -384,6 +473,24 @@ function applyDefaultPrices() {
   document.getElementById("perm-price").value = base.toFixed(2);
 }
 
+function applyInputRanges() {
+  const lotto = currentLotto();
+  const rules = GAME_RULES[lotto];
+  for (let i = 1; i <= 6; i++) {
+    const manual = document.getElementById(`m${i}`);
+    const perm = document.getElementById(`p${i}`);
+    const max = (lotto === "FL" || i <= 5) ? rules.main_max : rules.bonus_max;
+    if (manual) {
+      manual.min = "1";
+      manual.max = String(max);
+      manual.placeholder = `1-${max}`;
+    }
+    if (perm) {
+      perm.placeholder = i <= 5 || lotto === "FL" ? `1-${rules.main_max}` : `1-${rules.bonus_max}`;
+    }
+  }
+}
+
 function parseManualNumbers() {
   return [1,2,3,4,5,6].map(i => Number(document.getElementById(`m${i}`).value));
 }
@@ -394,6 +501,44 @@ function parseBucketValues(value) {
     .map(v => v.trim())
     .filter(Boolean)
     .map(v => Number(v));
+}
+
+function normalizeNumbersForLotto(lotto, numbers) {
+  if (lotto === "FL") {
+    return [...numbers].sort((a, b) => a - b);
+  }
+  const main = [...numbers.slice(0, 5)].sort((a, b) => a - b);
+  return [...main, numbers[5]];
+}
+
+function syncManualInputs(numbers) {
+  numbers.forEach((n, i) => {
+    const input = document.getElementById(`m${i + 1}`);
+    if (input) input.value = Number.isFinite(n) ? String(n) : "";
+  });
+}
+
+function validateClientNumbers(lotto, numbers) {
+  const rules = GAME_RULES[lotto];
+  if (numbers.some(n => !Number.isFinite(n))) return "Fill in all 6 number boxes.";
+  const normalized = normalizeNumbersForLotto(lotto, numbers);
+  const seen = new Set(normalized);
+  if (seen.size !== normalized.length) return "Ticket numbers must all be different.";
+  if (lotto === "FL") {
+    if (normalized.some(n => n < 1 || n > rules.main_max)) {
+      return `Florida numbers must be between 1 and ${rules.main_max}.`;
+    }
+    return "";
+  }
+  const main = normalized.slice(0, 5);
+  const bonus = normalized[5];
+  if (main.some(n => n < 1 || n > rules.main_max)) {
+    return `Main numbers must be between 1 and ${rules.main_max}.`;
+  }
+  if (bonus < 1 || bonus > rules.bonus_max) {
+    return `The 6th number must be between 1 and ${rules.bonus_max}.`;
+  }
+  return "";
 }
 
 async function loadTickets() {
@@ -416,8 +561,8 @@ function renderTickets(data) {
 
   document.getElementById("actual-balls").innerHTML = actualBallsHtml(data.actual_draw);
   document.getElementById("draw-status").textContent = data.actual_draw
-    ? `${LOTTO_LABELS[currentLotto()]} winning numbers for ${currentDate()}`
-    : `No actual draw is stored yet for ${currentDate()}.`;
+    ? `${LOTTO_LABELS[currentLotto()]} winning numbers for ${formatUsDate(currentDate())}`
+    : `No actual draw is stored yet for ${formatUsDate(currentDate())}.`;
 
   const winners = [];
   for (const row of data.tickets) {
@@ -427,9 +572,10 @@ function renderTickets(data) {
     tr.innerHTML = `
       <td>${row.Id}</td>
       <td><div class="ticket-numbers">${ticketBallsHtml(row)}</div></td>
+      <td><span class="ticket-status ${row.Purchased ? "purchased" : "optional"}">${row.Purchased ? "Purchased" : "Optional"}</span></td>
       <td>${formatMoney(row.TicketPrice)}</td>
       <td>${compareMode ? (cmp.match_label || "-") : "-"}</td>
-      <td>${compareMode ? (cmp.win_amount != null ? formatMoney(cmp.win_amount) : (cmp.is_winner ? "TBD" : "-")) : "-"}</td>
+      <td>${compareMode ? (cmp.win_amount != null ? `<span class="win-value">${formatMoney(cmp.win_amount)}</span>` : (cmp.is_winner ? `<span class="win-value">TBD</span>` : "-")) : "-"}</td>
       <td><button class="btn btn-secondary" data-delete="${row.Id}">Delete</button></td>
     `;
     body.appendChild(tr);
@@ -443,8 +589,9 @@ function renderTickets(data) {
     tr.innerHTML = `
       <td>${row.Id}</td>
       <td><div class="ticket-numbers">${ticketBallsHtml(row)}</div></td>
+      <td><span class="ticket-status ${row.Purchased ? "purchased" : "optional"}">${row.Purchased ? "Purchased" : "Optional"}</span></td>
       <td>${cmp.match_label || "-"}</td>
-      <td>${cmp.win_amount != null ? formatMoney(cmp.win_amount) : "TBD"}</td>
+      <td>${cmp.win_amount != null ? `<span class="win-value">${formatMoney(cmp.win_amount)}</span>` : `<span class="win-value">TBD</span>`}</td>
       <td class="match-note">${cmp.win_note || ""}</td>
     `;
     winnersBody.appendChild(tr);
@@ -461,20 +608,25 @@ function renderTickets(data) {
 async function saveManualTicket() {
   const error = document.getElementById("manual-error");
   error.classList.add("hidden");
+  const lotto = currentLotto();
   const numbers = parseManualNumbers();
-  if (numbers.some(n => !Number.isFinite(n))) {
-    error.textContent = "Fill in all 6 number boxes.";
+  const validationMessage = validateClientNumbers(lotto, numbers);
+  if (validationMessage) {
+    error.textContent = validationMessage;
     error.classList.remove("hidden");
     return;
   }
+  const normalized = normalizeNumbersForLotto(lotto, numbers);
+  syncManualInputs(normalized);
   const r = await fetch("/api/tickets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      lotto: currentLotto(),
+      lotto,
       draw_date: currentDate(),
-      numbers,
+      numbers: normalized,
       price: Number(document.getElementById("ticket-price").value || 0),
+      purchased: currentStatus("manual-status") === "purchased",
     })
   });
   const data = await r.json();
@@ -490,20 +642,33 @@ async function saveManualTicket() {
 async function savePermutations() {
   const error = document.getElementById("perm-error");
   error.classList.add("hidden");
+  const lotto = currentLotto();
   const buckets = [1,2,3,4,5,6].map(i => parseBucketValues(document.getElementById(`p${i}`).value));
   if (buckets.some(b => !b.length || b.some(n => !Number.isFinite(n)))) {
     error.textContent = "Each permutation field needs one or more comma-separated numbers.";
     error.classList.remove("hidden");
     return;
   }
+  const rules = GAME_RULES[lotto];
+  for (let i = 0; i < buckets.length; i++) {
+    const max = (lotto === "FL" || i < 5) ? rules.main_max : rules.bonus_max;
+    if (buckets[i].some(n => n < 1 || n > max)) {
+      error.textContent = i < 5 || lotto === "FL"
+        ? `Set ${i + 1} numbers must be between 1 and ${rules.main_max}.`
+        : `Set ${i + 1} numbers must be between 1 and ${rules.bonus_max}.`;
+      error.classList.remove("hidden");
+      return;
+    }
+  }
   const r = await fetch("/api/tickets/permutations", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      lotto: currentLotto(),
+      lotto,
       draw_date: currentDate(),
       buckets,
       price: Number(document.getElementById("perm-price").value || 0),
+      purchased: currentStatus("perm-status") === "purchased",
     })
   });
   const data = await r.json();
@@ -536,6 +701,7 @@ document.getElementById("sel-lotto").addEventListener("change", () => {
 });
 
 applyDefaultPrices();
+applyInputRanges();
 loadTickets();
 </script>
 </body>

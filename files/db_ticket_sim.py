@@ -48,6 +48,7 @@ def init_ticket_schema() -> None:
                 Id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 LottoType   CHAR(2)      NOT NULL,
                 DrawDate    DATE         NOT NULL,
+                Purchased   INTEGER      NOT NULL DEFAULT 1,
                 TicketPrice REAL         NOT NULL DEFAULT 0,
                 Nbr1        INTEGER      NOT NULL,
                 Nbr2        INTEGER      NOT NULL,
@@ -62,6 +63,9 @@ def init_ticket_schema() -> None:
                 ON TicketSimSelections (LottoType, DrawDate);
             """
         )
+        cols = {row["name"] for row in con.execute("PRAGMA table_info(TicketSimSelections)").fetchall()}
+        if "Purchased" not in cols:
+            con.execute("ALTER TABLE TicketSimSelections ADD COLUMN Purchased INTEGER NOT NULL DEFAULT 1")
 
 
 def purge_expired_tickets() -> int:
@@ -110,19 +114,20 @@ def ticket_exists(lotto_type: str, draw_date: str, numbers: list[int]) -> bool:
     return row is not None
 
 
-def add_ticket(lotto_type: str, draw_date: str, price: float, numbers: list[int]) -> int | None:
+def add_ticket(lotto_type: str, draw_date: str, price: float, numbers: list[int], purchased: bool = True) -> int | None:
     if ticket_exists(lotto_type, draw_date, numbers):
         return None
     with _conn() as con:
         cur = con.execute(
             """
             INSERT INTO TicketSimSelections
-            (LottoType, DrawDate, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (LottoType, DrawDate, Purchased, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 lotto_type,
                 draw_date,
+                1 if purchased else 0,
                 price,
                 numbers[0],
                 numbers[1],
@@ -144,7 +149,7 @@ def get_tickets(lotto_type: str, draw_date: str) -> list[dict]:
     with _conn() as con:
         rows = con.execute(
             """
-            SELECT Id, LottoType, DrawDate, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6, CreatedAt
+            SELECT Id, LottoType, DrawDate, Purchased, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6, CreatedAt
             FROM TicketSimSelections
             WHERE LottoType = ? AND DrawDate = ?
             ORDER BY Id
@@ -160,7 +165,7 @@ def get_total_spent(lotto_type: str, draw_date: str) -> float:
             """
             SELECT COALESCE(SUM(TicketPrice), 0) AS total_spent
             FROM TicketSimSelections
-            WHERE LottoType = ? AND DrawDate = ?
+            WHERE LottoType = ? AND DrawDate = ? AND Purchased = 1
             """,
             (lotto_type, draw_date),
         ).fetchone()

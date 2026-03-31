@@ -25,9 +25,10 @@ def _journal_mode() -> str:
 @contextmanager
 def _conn():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=30)
     con.row_factory = sqlite3.Row
     con.execute(f"PRAGMA journal_mode={_journal_mode()}")
+    con.execute("PRAGMA busy_timeout=30000")
     con.execute("PRAGMA foreign_keys=ON")
     try:
         yield con
@@ -64,14 +65,19 @@ def init_ticket_schema() -> None:
 
 
 def purge_expired_tickets() -> int:
-    with _conn() as con:
-        cur = con.execute(
-            """
-            DELETE FROM TicketSimSelections
-            WHERE DATE(DrawDate, '+7 day') < DATE('now')
-            """
-        )
-        return int(cur.rowcount or 0)
+    try:
+        with _conn() as con:
+            cur = con.execute(
+                """
+                DELETE FROM TicketSimSelections
+                WHERE DATE(DrawDate, '+7 day') < DATE('now')
+                """
+            )
+            return int(cur.rowcount or 0)
+    except sqlite3.OperationalError as exc:
+        if "locked" in str(exc).lower():
+            return 0
+        raise
 
 
 def ticket_exists(lotto_type: str, draw_date: str, numbers: list[int]) -> bool:

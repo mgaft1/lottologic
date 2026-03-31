@@ -43,12 +43,16 @@ def _resolve_db_path() -> str:
 
 DB_PATH = os.environ.get("LOTTO_DB", _resolve_db_path())
 
+def _journal_mode() -> str:
+    mode = os.environ.get("LOTTO_SQLITE_JOURNAL_MODE", "DELETE").upper()
+    return mode if mode in {"DELETE", "WAL", "TRUNCATE", "PERSIST", "MEMORY", "OFF"} else "DELETE"
+
 
 @contextmanager
 def _conn():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
-    con.execute("PRAGMA journal_mode=WAL")
+    con.execute(f"PRAGMA journal_mode={_journal_mode()}")
     con.execute("PRAGMA foreign_keys=ON")
     try:
         yield con

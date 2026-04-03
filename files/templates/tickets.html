@@ -249,6 +249,15 @@ td {
   width: 18px;
   height: 18px;
 }
+.status-toggle {
+  width: 24px;
+  height: 24px;
+  accent-color: #3d7cf0;
+  cursor: pointer;
+}
+.status-toggle-cell {
+  text-align: center;
+}
 .winner-row {
   background: #edf7ee;
 }
@@ -336,8 +345,8 @@ td {
       <div class="field">
         <label>Status</label>
         <div class="status-group">
-          <label class="status-choice"><input type="radio" name="manual-status" value="purchased" checked>Purchased</label>
-          <label class="status-choice"><input type="radio" name="manual-status" value="optional">Optional</label>
+          <label class="status-choice"><input type="radio" name="manual-status" value="purchased">Purchased</label>
+          <label class="status-choice"><input type="radio" name="manual-status" value="optional" checked>Optional</label>
         </div>
       </div>
       <div class="field"><label>Price</label><input type="number" id="ticket-price" min="0" step="0.01"></div>
@@ -360,8 +369,8 @@ td {
       <div class="field">
         <label>Status</label>
         <div class="status-group">
-          <label class="status-choice"><input type="radio" name="perm-status" value="purchased" checked>Purchased</label>
-          <label class="status-choice"><input type="radio" name="perm-status" value="optional">Optional</label>
+          <label class="status-choice"><input type="radio" name="perm-status" value="purchased">Purchased</label>
+          <label class="status-choice"><input type="radio" name="perm-status" value="optional" checked>Optional</label>
         </div>
       </div>
       <div class="field"><label>Price</label><input type="number" id="perm-price" min="0" step="0.01"></div>
@@ -393,6 +402,7 @@ td {
         <tr>
           <th>#</th>
           <th>Numbers</th>
+          <th>Purchased</th>
           <th>Status</th>
           <th>Price</th>
           <th>Result</th>
@@ -446,7 +456,7 @@ function formatUsDate(dateStr) {
 }
 
 function currentStatus(groupName) {
-  return document.querySelector(`input[name="${groupName}"]:checked`)?.value || "purchased";
+  return document.querySelector(`input[name="${groupName}"]:checked`)?.value || "optional";
 }
 
 function formatMoney(v) {
@@ -572,6 +582,7 @@ function renderTickets(data) {
     tr.innerHTML = `
       <td>${row.Id}</td>
       <td><div class="ticket-numbers">${ticketBallsHtml(row)}</div></td>
+      <td class="status-toggle-cell"><input class="status-toggle" type="checkbox" data-status="${row.Id}" ${row.Purchased ? "checked" : ""} title="Checked = Purchased, unchecked = Optional"></td>
       <td><span class="ticket-status ${row.Purchased ? "purchased" : "optional"}">${row.Purchased ? "Purchased" : "Optional"}</span></td>
       <td>${formatMoney(row.TicketPrice)}</td>
       <td>${compareMode ? (cmp.match_label || "-") : "-"}</td>
@@ -600,6 +611,17 @@ function renderTickets(data) {
   document.querySelectorAll("[data-delete]").forEach(btn => {
     btn.addEventListener("click", async () => {
       await fetch(`/api/tickets/${btn.dataset.delete}`, { method: "DELETE" });
+      await loadTickets();
+    });
+  });
+
+  document.querySelectorAll("[data-status]").forEach(box => {
+    box.addEventListener("change", async () => {
+      await fetch(`/api/tickets/${box.dataset.status}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purchased: box.checked }),
+      });
       await loadTickets();
     });
   });

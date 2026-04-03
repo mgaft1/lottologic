@@ -145,6 +145,15 @@ def delete_ticket(ticket_id: int) -> None:
         con.execute("DELETE FROM TicketSimSelections WHERE Id = ?", (ticket_id,))
 
 
+def update_ticket_status(ticket_id: int, purchased: bool) -> bool:
+    with _conn() as con:
+        cur = con.execute(
+            "UPDATE TicketSimSelections SET Purchased = ? WHERE Id = ?",
+            (1 if purchased else 0, ticket_id),
+        )
+        return int(cur.rowcount or 0) > 0
+
+
 def get_tickets(lotto_type: str, draw_date: str) -> list[dict]:
     with _conn() as con:
         rows = con.execute(

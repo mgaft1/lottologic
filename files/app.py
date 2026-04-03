@@ -473,6 +473,17 @@ def api_tickets_delete(ticket_id):
     return jsonify({"deleted": ticket_id})
 
 
+@app.route("/api/tickets/<int:ticket_id>/status", methods=["POST"])
+@login_required
+def api_tickets_update_status(ticket_id):
+    data = request.get_json(silent=True) or {}
+    purchased = _parse_purchased_flag(data.get("purchased", False))
+    updated = db_ticket_sim.update_ticket_status(ticket_id, purchased)
+    if not updated:
+        return jsonify({"error": "Ticket not found"}), 404
+    return jsonify({"id": ticket_id, "purchased": purchased})
+
+
 # ---------------------------------------------------------------------------
 # Main viewer page
 # ---------------------------------------------------------------------------

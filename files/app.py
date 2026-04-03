@@ -128,6 +128,13 @@ def _is_render_runtime() -> bool:
     return bool(os.environ.get("RENDER")) or "render.com" in os.environ.get("RENDER_EXTERNAL_URL", "")
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # ---------------------------------------------------------------------------
 # Window helpers
 # ---------------------------------------------------------------------------
@@ -993,17 +1000,24 @@ def initialize_runtime() -> None:
             logger.warning("Seed workbook not found at %s", xlsx)
 
         db_forecast.init_forecast_schema()
-        _backfill_missing()
+        run_forecast_bootstrap = _env_flag("LOTTO_BOOTSTRAP_FORECASTS", not is_render_runtime)
+        if run_forecast_bootstrap:
+            _backfill_missing()
+        else:
+            logger.info("Skipping forecast bootstrap during startup.")
 
         db_selection.init_selection_schema()
-        _populate_selections()
+        run_selection_bootstrap = _env_flag("LOTTO_BOOTSTRAP_SELECTIONS", not is_render_runtime)
+        if run_selection_bootstrap:
+            _populate_selections()
+        else:
+            logger.info("Skipping selection bootstrap during startup.")
 
         db_links.init_links_schema()
         db_ticket_sim.init_ticket_schema()
         db_ticket_sim.purge_expired_tickets()
 
-        background_scraper_default = "0" if is_render_runtime else "1"
-        if os.environ.get("LOTTO_BACKGROUND_SCRAPER", background_scraper_default) == "1":
+        if _env_flag("LOTTO_BACKGROUND_SCRAPER", not is_render_runtime):
             scraper.start_background_scraper()
 
         _runtime_initialized = True

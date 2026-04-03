@@ -124,6 +124,10 @@ APP_TIMEZONE = _resolve_app_timezone()
 TICKET_CUTOFF_TIME = time(19, 45)
 
 
+def _is_render_runtime() -> bool:
+    return bool(os.environ.get("RENDER")) or "render.com" in os.environ.get("RENDER_EXTERNAL_URL", "")
+
+
 # ---------------------------------------------------------------------------
 # Window helpers
 # ---------------------------------------------------------------------------
@@ -974,14 +978,17 @@ def initialize_runtime() -> None:
 
         logger.info("Using lotto DB at %s", db.DB_PATH)
 
+        is_render_runtime = _is_render_runtime()
         xlsx = Path(__file__).resolve().parent.parent / "data" / "Lotto.xlsx"
         db_exists = Path(db.DB_PATH).exists()
         if not db_exists:
             logger.info("Initialising database...")
         db.init_db()
-        if xlsx.exists():
+        if xlsx.exists() and (not db_exists or not is_render_runtime):
             summary = db.ingest_xlsx(str(xlsx))
             logger.info("Workbook sync complete: %s", summary)
+        elif xlsx.exists():
+            logger.info("Skipping workbook sync on Render because persistent DB already exists.")
         else:
             logger.warning("Seed workbook not found at %s", xlsx)
 
@@ -995,7 +1002,8 @@ def initialize_runtime() -> None:
         db_ticket_sim.init_ticket_schema()
         db_ticket_sim.purge_expired_tickets()
 
-        if os.environ.get("LOTTO_BACKGROUND_SCRAPER", "1") == "1":
+        background_scraper_default = "0" if is_render_runtime else "1"
+        if os.environ.get("LOTTO_BACKGROUND_SCRAPER", background_scraper_default) == "1":
             scraper.start_background_scraper()
 
         _runtime_initialized = True

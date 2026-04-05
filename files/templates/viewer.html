@@ -220,6 +220,13 @@ body {
 
   <span class="sep">|</span>
 
+  <a href="/" style="color:#ffffff;font-size:1.38rem;text-decoration:none;padding:7px 14px;background:#4488ff;border:1px solid #2266dd;border-radius:4px;font-weight:bold;">Lotto Viewer</a>
+  <a href="/gaps" style="color:#ffffff;font-size:1.38rem;text-decoration:none;padding:7px 14px;background:#4488ff;border:1px solid #2266dd;border-radius:4px;font-weight:bold;">Time Gaps</a>
+  <a href="/tickets" style="color:#ffffff;font-size:1.38rem;text-decoration:none;padding:7px 14px;background:#4488ff;border:1px solid #2266dd;border-radius:4px;font-weight:bold;">Predictions</a>
+  <a href="/links" style="color:#ffffff;font-size:1.38rem;text-decoration:none;padding:7px 14px;background:#4488ff;border:1px solid #2266dd;border-radius:4px;font-weight:bold;">Links</a>
+
+  <span class="sep">|</span>
+
   <!-- 2. Lotto type dropdown -->
   <select id="sel-lotto">
     {% for lt in lotto_types %}
@@ -284,8 +291,8 @@ body {
 
   <span class="sep">|</span>
 
-  <!-- 8. Future Corridor -->
-  <button id="btn-future-corridor">Future Corridor</button>
+  <!-- 8. Future Expectations -->
+  <button id="btn-future-corridor">Future Expectations</button>
   <div id="bands-toolbar" style="display:none;">
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:1.3rem;">
       <input type="checkbox" id="chk-bands"> Show Bands
@@ -368,11 +375,11 @@ body {
   <span id="status-hover"></span>
 </div>
 
-<!-- ── Future Corridor Modal ── -->
+<!-- ── Future Expectations Modal ── -->
 <div id="fc-overlay" style="display:none;">
   <div id="fc-modal">
     <div id="fc-header">
-      <span id="fc-title">Future Corridor</span>
+      <span id="fc-title">Future Expectations</span>
       <button id="fc-close">✕</button>
     </div>
     <div id="fc-subheader">
@@ -764,7 +771,7 @@ function renderBands(minV, maxV) {
 
   function drawLine(getVal, color, dash) {
     ctx2d.strokeStyle = color;
-    ctx2d.lineWidth = 1.5;
+    ctx2d.lineWidth = 3.5;
     ctx2d.setLineDash(dash);
     ctx2d.beginPath();
     let started = false;
@@ -780,10 +787,10 @@ function renderBands(minV, maxV) {
     ctx2d.setLineDash([]);
   }
 
-  drawLine(r => r.SafeHigh, "#2dd4bf", []);
-  drawLine(r => r.SafeLow,  "#2dd4bf", []);
-  drawLine(r => r.HotHigh,  "#f87171", [5, 4]);
-  drawLine(r => r.HotLow,   "#f87171", [5, 4]);
+  drawLine(r => r.SafeHigh, "#00d9c0", []);
+  drawLine(r => r.SafeLow,  "#00d9c0", []);
+  drawLine(r => r.HotHigh,  "#ff4d4f", [10, 5]);
+  drawLine(r => r.HotLow,   "#ff4d4f", [10, 5]);
 }
 
 function renderPolyPointList(points, setNo, minV, maxV) {

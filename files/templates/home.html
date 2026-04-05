@@ -9,14 +9,12 @@
 
 :root {
   --bg: #eef3fb;
-  --panel: rgba(255, 255, 255, 0.84);
-  --panel-strong: rgba(255, 255, 255, 0.94);
+  --panel: rgba(255, 255, 255, 0.9);
   --ink: #10233f;
   --muted: #5f7088;
   --line: rgba(16, 35, 63, 0.12);
-  --accent: #1d5eff;
-  --accent-soft: rgba(29, 94, 255, 0.12);
-  --accent-2: #10a5b5;
+  --accent: #165dff;
+  --accent-2: #0f89ff;
   --shadow: 0 28px 80px rgba(31, 53, 92, 0.16);
 }
 
@@ -57,24 +55,38 @@ body {
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
 }
 
 .nav-links a,
 .logout {
-  color: var(--muted);
   text-decoration: none;
-  font-size: 0.98rem;
-  font-weight: 600;
 }
 
-.nav-links a:hover,
+.nav-links a {
+  color: #ffffff;
+  font-size: 1.38rem;
+  font-weight: bold;
+  padding: 7px 14px;
+  background: #4488ff;
+  border: 1px solid #2266dd;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.nav-links a:hover {
+  background: #3d7cf0;
+}
+
 .logout:hover {
   color: var(--accent);
 }
 
 .logout {
   margin-left: auto;
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 600;
 }
 
 #content {
@@ -86,147 +98,47 @@ body {
 }
 
 .hero {
-  width: min(980px, 100%);
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 28px;
-  align-items: stretch;
+  width: min(760px, 100%);
 }
 
-.intro,
 .actions {
   background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: 28px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
-}
-
-.intro {
-  padding: 44px;
+  padding: 34px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 18px;
-}
-
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 0.88rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.intro h1 {
-  font-size: clamp(2.6rem, 5vw, 4.2rem);
-  line-height: 0.95;
-  letter-spacing: -0.05em;
-}
-
-.intro p {
-  max-width: 34rem;
-  color: var(--muted);
-  font-size: 1.08rem;
-  line-height: 1.65;
-}
-
-.stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.stat {
-  padding: 12px 16px;
-  border-radius: 18px;
-  background: var(--panel-strong);
-  border: 1px solid var(--line);
-  min-width: 132px;
-}
-
-.stat strong {
-  display: block;
-  font-size: 1.12rem;
-  margin-bottom: 4px;
-}
-
-.stat span {
-  color: var(--muted);
-  font-size: 0.92rem;
-}
-
-.actions {
-  padding: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.actions-header h2 {
-  font-size: 1.38rem;
-  margin-bottom: 6px;
-}
-
-.actions-header p {
-  color: var(--muted);
-  line-height: 1.55;
 }
 
 .action-card {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 20px 22px;
-  border-radius: 22px;
+  align-items: center;
+  justify-content: center;
+  min-height: 112px;
+  padding: 24px 28px;
+  border-radius: 24px;
   text-decoration: none;
-  color: var(--ink);
-  background: var(--panel-strong);
-  border: 1px solid var(--line);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  border: 1px solid rgba(16, 35, 63, 0.08);
+  box-shadow: 0 18px 36px rgba(22, 93, 255, 0.24);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
 
 .action-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(29, 94, 255, 0.24);
-  box-shadow: 0 18px 36px rgba(31, 53, 92, 0.12);
-}
-
-.action-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.action-kicker {
-  color: var(--accent);
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.action-arrow {
-  color: var(--accent);
-  font-size: 1.25rem;
-  font-weight: 700;
+  transform: translateY(-3px);
+  box-shadow: 0 26px 46px rgba(22, 93, 255, 0.28);
+  filter: saturate(1.05);
 }
 
 .action-card h3 {
-  font-size: 1.24rem;
-}
-
-.action-card p {
-  color: var(--muted);
-  line-height: 1.55;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-align: center;
 }
 
 @media (max-width: 860px) {
@@ -241,12 +153,16 @@ body {
   }
 
   .hero {
-    grid-template-columns: 1fr;
+    width: 100%;
   }
 
-  .intro,
   .actions {
     padding: 28px;
+  }
+
+  .action-card {
+    min-height: 96px;
+    padding: 22px;
   }
 }
 </style>
@@ -256,84 +172,31 @@ body {
   <div id="navbar">
     <div class="brand">Lottologic</div>
     <div class="nav-links">
-      <a href="/">Viewer</a>
-      <a href="/gaps">Gap Patterns</a>
-      <a href="/tickets">Ticket Simulator</a>
-      <a href="/links">My Links</a>
+      <a href="/">Lotto Viewer</a>
+      <a href="/gaps">Time Gaps</a>
+      <a href="/tickets">Predictions</a>
+      <a href="/links">Links</a>
     </div>
     <a href="/logout" class="logout">Sign out</a>
   </div>
 
   <div id="content">
     <div class="hero">
-      <section class="intro">
-        <span class="eyebrow">Analysis Workspace</span>
-        <h1>Lottery tracking, forecasts, and visual pattern work in one place.</h1>
-        <p>
-          Use the viewer to inspect draw history, compare movement across sets,
-          explore gap behavior, and keep your saved research links organized.
-        </p>
-
-        <div class="stats">
-          <div class="stat">
-            <strong>Viewer</strong>
-            <span>Interactive chart analysis</span>
-          </div>
-          <div class="stat">
-            <strong>Gaps</strong>
-            <span>Pattern comparison tools</span>
-          </div>
-          <div class="stat">
-            <strong>Links</strong>
-            <span>Saved research references</span>
-          </div>
-          <div class="stat">
-            <strong>Tickets</strong>
-            <span>Purchase simulation</span>
-          </div>
-        </div>
-      </section>
-
       <section class="actions">
-        <div class="actions-header">
-          <h2>Open a workspace</h2>
-          <p>Jump directly into the part of the app you want to use right now.</p>
-        </div>
-
         <a class="action-card" href="/">
-          <div class="action-top">
-            <span class="action-kicker">Main Tool</span>
-            <span class="action-arrow">→</span>
-          </div>
           <h3>Lotto Viewer</h3>
-          <p>Browse draw history, fit curves, compare sets, and inspect the latest results.</p>
         </a>
 
         <a class="action-card" href="/gaps">
-          <div class="action-top">
-            <span class="action-kicker">Patterns</span>
-            <span class="action-arrow">→</span>
-          </div>
-          <h3>Gap Patterns</h3>
-          <p>Search recurring spacing behavior and study how number gaps line up over time.</p>
+          <h3>Time Gaps</h3>
         </a>
 
         <a class="action-card" href="/links">
-          <div class="action-top">
-            <span class="action-kicker">Research</span>
-            <span class="action-arrow">→</span>
-          </div>
-          <h3>My Links</h3>
-          <p>Keep useful videos and related references close to the rest of your workflow.</p>
+          <h3>Links</h3>
         </a>
 
         <a class="action-card" href="/tickets">
-          <div class="action-top">
-            <span class="action-kicker">Simulation</span>
-            <span class="action-arrow">→</span>
-          </div>
-          <h3>Ticket Simulator</h3>
-          <p>Record proposed tickets, total the spend, and compare them against actual draw results.</p>
+          <h3>Predictions</h3>
         </a>
       </section>
     </div>

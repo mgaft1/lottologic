@@ -260,6 +260,59 @@ def parse_colorado_pb_pd(html: str) -> tuple[list[dict], list[dict]]:
     return pb_draws, pd_draws
 
 
+def parse_powerball_previous_results(html: str, game_code: str) -> list[dict]:
+    """
+    Parse official Powerball previous-results pages.
+
+    Supported game_code values:
+      - "powerball"
+      - "pb-double-play"
+
+    We rely on the result card links because they contain both the draw date
+    and the winning numbers in a compact, server-rendered format that has
+    proven more stable than the Colorado Lottery page.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    draws = []
+    seen_dates = set()
+
+    href_re = re.compile(rf"/draw-result\?date=(\d{{4}}-\d{{2}}-\d{{2}})&gc={re.escape(game_code)}\b")
+
+    for link in soup.find_all("a", href=True):
+        href = link.get("href", "")
+        match = href_re.search(href)
+        if not match:
+            continue
+
+        draw_date = match.group(1)
+        if draw_date in seen_dates:
+            continue
+
+        text = " ".join(link.stripped_strings)
+        nums = [int(n) for n in re.findall(r"\b\d+\b", text)]
+        if len(nums) < 9:
+            continue
+
+        # The first three numbers are month/day/year from the human-readable
+        # date; the next six are the winning numbers we want.
+        balls = nums[3:9]
+        if len(balls) != 6:
+            continue
+
+        draws.append({
+            "draw_date": draw_date,
+            "n1": balls[0],
+            "n2": balls[1],
+            "n3": balls[2],
+            "n4": balls[3],
+            "n5": balls[4],
+            "n6": balls[5],
+        })
+        seen_dates.add(draw_date)
+
+    return draws
+
+
 def get_colorado_month_urls(html: str) -> list[str]:
     """
     Extract all month page URLs from the <select class="go-to-month"> dropdown.
@@ -340,23 +393,59 @@ def _scrape_fl(existing: set[str]) -> int:
 
 def _scrape_pb_pd(existing_pb: set[str], existing_pd: set[str]) -> tuple[int, int]:
     """
-    Fetch the current month page first to get the full list of all available
-    month URLs from the dropdown, then walk every month.
+    Prefer official Powerball result pages for recent PB/PD results because
+    they are more stable on Render. Fall back to the older Colorado Lottery
+    month scraper if the official pages produce no parsable rows.
     """
+    inserted_pb = inserted_pd = 0
+
+    official_sources = [
+        ("PB", "https://www.powerball.com/previous-results", "powerball", existing_pb),
+        ("PD", "https://www.powerball.com/previous-results?gc=pb-double-play", "pb-double-play", existing_pd),
+    ]
+
+    parsed_any = False
+    for lotto_type, url, game_code, existing in official_sources:
+        html = _fetch(url)
+        if not html:
+            logger.warning("%s official previous-results fetch returned no HTML", lotto_type)
+            continue
+
+        draws = parse_powerball_previous_results(html, game_code)
+        logger.info("%s official previous-results parsed %d draw(s)", lotto_type, len(draws))
+        if draws:
+            parsed_any = True
+
+        for d in draws:
+            if d["draw_date"] in existing:
+                continue
+            if db.insert_draw(
+                lotto_type,
+                d["draw_date"],
+                d["n1"], d["n2"], d["n3"], d["n4"], d["n5"], d["n6"],
+            ):
+                if lotto_type == "PB":
+                    inserted_pb += 1
+                else:
+                    inserted_pd += 1
+                existing.add(d["draw_date"])
+
+    if parsed_any:
+        return inserted_pb, inserted_pd
+
+    logger.warning("Official PB/PD source produced no rows; falling back to Colorado Lottery source.")
+
     base_url   = 'https://www.coloradolottery.com/en/games/powerball/drawings/'
     now        = datetime.now()
     first_page = f'{base_url}{now.year}-{now.month:02d}/'
-
     html = _fetch(first_page)
     if not html:
-        return 0, 0
+        return inserted_pb, inserted_pd
 
     month_urls = get_colorado_month_urls(html)
     if not month_urls:
         # Fallback: just use this month
         month_urls = [first_page]
-
-    inserted_pb = inserted_pd = 0
 
     for url in month_urls:
         page_html = html if url == first_page else _fetch(url)

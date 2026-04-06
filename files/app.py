@@ -1000,7 +1000,9 @@ def initialize_runtime() -> None:
             logger.warning("Seed workbook not found at %s", xlsx)
 
         db_forecast.init_forecast_schema()
-        run_forecast_bootstrap = _env_flag("LOTTO_BOOTSTRAP_FORECASTS", not is_render_runtime)
+        # On Render, keep forecasts incrementally refreshed so newly scraped
+        # draw dates appear without requiring a manual rebuild of the DB.
+        run_forecast_bootstrap = _env_flag("LOTTO_BOOTSTRAP_FORECASTS", True)
         if run_forecast_bootstrap:
             _backfill_missing()
         else:
@@ -1017,7 +1019,9 @@ def initialize_runtime() -> None:
         db_ticket_sim.init_ticket_schema()
         db_ticket_sim.purge_expired_tickets()
 
-        if _env_flag("LOTTO_BACKGROUND_SCRAPER", not is_render_runtime):
+        # Run the scraper on Render too so the persistent database does not
+        # get stuck on an old latest draw date.
+        if _env_flag("LOTTO_BACKGROUND_SCRAPER", True):
             scraper.start_background_scraper()
 
         _runtime_initialized = True

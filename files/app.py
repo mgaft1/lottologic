@@ -911,7 +911,23 @@ def api_gaps():
 # YouTube Links page
 # ---------------------------------------------------------------------------
 
-CATEGORIES = ["music", "cooking", "baking"]
+CATEGORIES = [
+    "music",
+    "cooking",
+    "baking",
+    "fashion",
+    "med. remedies",
+    "med. medicine",
+    "dancing",
+    "singers",
+    "music classical",
+    "music georgian",
+    "music caucasian",
+    "musical writing skills",
+    "literature poems",
+    "literature novels",
+    "literature writing skills",
+]
 
 
 @app.route("/links")

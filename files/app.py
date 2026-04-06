@@ -122,6 +122,11 @@ def _resolve_app_timezone():
 
 APP_TIMEZONE = _resolve_app_timezone()
 TICKET_CUTOFF_TIME = time(19, 45)
+DRAW_RESULTS_READY_TIME = time(21, 30)
+VIEWER_REFRESH_RETRY_WINDOW = timedelta(minutes=10)
+_viewer_refresh_attempts: dict[str, datetime] = {}
+_viewer_refresh_state_lock = threading.Lock()
+_viewer_refresh_locks = {lt: threading.Lock() for lt in LOTTO_LABELS}
 
 
 def _is_render_runtime() -> bool:
@@ -133,6 +138,10 @@ def _env_flag(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _now_local() -> datetime:
+    return datetime.now(APP_TIMEZONE) if APP_TIMEZONE else datetime.now()
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +186,93 @@ def is_draw_day(lotto_type: str, target: date) -> bool:
     if lotto_type == "MM":
         return dow in {1, 4}  # Tue, Fri
     return dow in {0, 2, 5}   # PB, PD: Mon, Wed, Sat
+
+
+def latest_completed_draw_date(lotto_type: str, now_local: datetime | None = None) -> date:
+    """
+    Return the most recent scheduled draw date that should reasonably be
+    available by now for the given lotto type.
+    """
+    now_local = now_local or _now_local()
+    candidate = now_local.date()
+    if is_draw_day(lotto_type, candidate) and now_local.time() < DRAW_RESULTS_READY_TIME:
+        candidate -= timedelta(days=1)
+    while not is_draw_day(lotto_type, candidate):
+        candidate -= timedelta(days=1)
+    return candidate
+
+
+def _refresh_forecasts_for_lotto(lotto_type: str) -> None:
+    from forecast import backfill_predictions
+
+    last = db_forecast.get_last_forecast_date(lotto_type, FORECAST_MODEL)
+    if last is None:
+        dates = db_forecast.get_draw_dates(lotto_type)
+        if not dates:
+            return
+        logger.info("%s forecast missing; backfilling %d date(s)", lotto_type, len(dates))
+        backfill_predictions(lotto_type, dates, FORECAST_MODEL, _dal=db_forecast)
+        return
+
+    new_dates = [d for d in db_forecast.get_draw_dates_after(lotto_type, last) if d > last]
+    if new_dates:
+        logger.info("%s forecast stale; backfilling %d new date(s)", lotto_type, len(new_dates))
+        backfill_predictions(lotto_type, new_dates, FORECAST_MODEL, _dal=db_forecast)
+
+
+def ensure_lotto_draws_current(lotto_type: str) -> None:
+    """
+    Viewer stale-data guard. If the DB's latest draw date is behind the most
+    recent completed scheduled draw for this lotto type, attempt a targeted
+    refresh before serving data.
+    """
+    now_local = _now_local()
+    expected_latest = latest_completed_draw_date(lotto_type, now_local)
+    _, latest_str = db.get_date_bounds(lotto_type)
+    latest_db = date.fromisoformat(latest_str) if latest_str else None
+    if latest_db and latest_db >= expected_latest:
+        return
+
+    with _viewer_refresh_state_lock:
+        last_attempt = _viewer_refresh_attempts.get(lotto_type)
+        if last_attempt and (now_local - last_attempt) < VIEWER_REFRESH_RETRY_WINDOW:
+            logger.info(
+                "%s stale-data refresh skipped; last attempt at %s within retry window",
+                lotto_type,
+                last_attempt.isoformat(),
+            )
+            return
+        _viewer_refresh_attempts[lotto_type] = now_local
+
+    lock = _viewer_refresh_locks[lotto_type]
+    if not lock.acquire(blocking=False):
+        logger.info("%s stale-data refresh already in progress", lotto_type)
+        return
+
+    try:
+        _, latest_str = db.get_date_bounds(lotto_type)
+        latest_db = date.fromisoformat(latest_str) if latest_str else None
+        if latest_db and latest_db >= expected_latest:
+            return
+
+        logger.info(
+            "%s latest draw stale on viewer request: db=%s expected=%s; refreshing",
+            lotto_type,
+            latest_db.isoformat() if latest_db else "none",
+            expected_latest.isoformat(),
+        )
+        refresh_summary = scraper.refresh_lotto_type(lotto_type)
+        logger.info("%s on-demand refresh summary: %s", lotto_type, refresh_summary)
+
+        refresh_targets = [lotto_type]
+        if lotto_type in {"PB", "PD"}:
+            refresh_targets = ["PB", "PD"]
+        for target in refresh_targets:
+            _refresh_forecasts_for_lotto(target)
+    except Exception as exc:
+        logger.warning("%s on-demand viewer refresh failed: %s", lotto_type, exc)
+    finally:
+        lock.release()
 
 
 def default_ticket_draw_date(lotto_type: str, latest_draw: date) -> date:
@@ -507,6 +603,8 @@ def index():
     if days not in WINDOW_DAYS:
         days = DEFAULT_DAYS
 
+    ensure_lotto_draws_current(lotto_type)
+
     earliest_str, latest_str = db.get_date_bounds(lotto_type)
     if not latest_str:
         latest_str = date.today().isoformat()
@@ -561,6 +659,7 @@ def api_draws():
     cutoff_past_ = request.args.get("cutoff_past")
     if not cutoff_now or not cutoff_past_:
         return jsonify({"error": "cutoff_now and cutoff_past required"}), 400
+    ensure_lotto_draws_current(lotto_type)
     draws = db.get_draws_in_window(lotto_type, cutoff_past_, cutoff_now)
     return jsonify(draws)
 

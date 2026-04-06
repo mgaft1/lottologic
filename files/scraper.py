@@ -569,6 +569,52 @@ def _worker():
                 return
 
 
+def refresh_lotto_type(lotto_type: str) -> dict[str, int]:
+    """
+    Run an on-demand incremental refresh for a single lotto type.
+
+    Designed for request-time stale-data repair: fetch only the current
+    year/month or recent official results, not a full historical pass.
+    """
+    lotto_type = lotto_type.upper()
+
+    if lotto_type == "CA":
+        inserted = _scrape_year_only(
+            "CA",
+            "https://www.lottery.net/california/superlotto-plus/numbers/",
+            parse_lottery_net_ca,
+            db.get_existing_dates("CA"),
+        )
+        return {"CA": inserted}
+
+    if lotto_type == "MM":
+        inserted = _scrape_year_only(
+            "MM",
+            "https://www.lottery.net/mega-millions/numbers/",
+            parse_lottery_net_mm,
+            db.get_existing_dates("MM"),
+        )
+        return {"MM": inserted}
+
+    if lotto_type == "FL":
+        inserted = _scrape_year_only(
+            "FL",
+            "https://www.lottonumbers.com/florida-lotto/numbers/",
+            parse_lottonumbers_fl,
+            db.get_existing_dates("FL"),
+        )
+        return {"FL": inserted}
+
+    if lotto_type in {"PB", "PD"}:
+        pb_inserted, pd_inserted = _scrape_pb_pd(
+            db.get_existing_dates("PB"),
+            db.get_existing_dates("PD"),
+        )
+        return {"PB": pb_inserted, "PD": pd_inserted}
+
+    raise ValueError(f"Unsupported lotto type: {lotto_type}")
+
+
 def start_background_scraper():
     """Launch daemon scraper thread. Returns immediately."""
     global _scraper_thread

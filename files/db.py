@@ -118,6 +118,20 @@ def insert_draw(lotto_type: str, draw_date: str,
         return True
 
 
+def update_draw(lotto_type: str, draw_date: str,
+                n1: int, n2: int, n3: int, n4: int, n5: int,
+                n6) -> bool:
+    """Update one existing draw row. Returns True if a row was updated."""
+    with _conn() as con:
+        cur = con.execute(
+            """UPDATE DrawHistory
+               SET Nbr1=?, Nbr2=?, Nbr3=?, Nbr4=?, Nbr5=?, Nbr6=?
+               WHERE LottoType=? AND DrawDate=?""",
+            (n1, n2, n3, n4, n5, n6, lotto_type, draw_date)
+        )
+    return cur.rowcount > 0
+
+
 # ---------------------------------------------------------------------------
 # Queries
 # ---------------------------------------------------------------------------

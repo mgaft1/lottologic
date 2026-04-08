@@ -136,6 +136,12 @@ input::placeholder {
   gap: 8px;
   align-items: end;
 }
+.draw-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
+  gap: 8px;
+  align-items: end;
+}
 .perm-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr)) 180px 120px auto;
@@ -275,11 +281,11 @@ td {
 }
 .hidden { display: none !important; }
 @media (max-width: 1100px) {
-  .entry-grid, .perm-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .draw-entry-grid, .entry-grid, .perm-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .entry-grid, .perm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .draw-entry-grid, .entry-grid, .perm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>
 </head>
@@ -288,7 +294,6 @@ td {
   <a href="/home">Home</a>
   <a href="/">Lotto Viewer</a>
   <a href="/gaps">Time Gaps</a>
-  <a href="/tickets">Predictions</a>
   <a href="/links">Links</a>
   <a href="/logout" class="nav-logout">Sign out</a>
 </div>
@@ -311,6 +316,26 @@ td {
       <button class="btn" id="btn-load">Load</button>
       <div class="helper">Temporary ticket storage is kept for 7 days after the draw date, then deleted automatically.</div>
     </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-head">
+      <div>
+        <div class="section-title">Winning Numbers Entry</div>
+        <div class="helper">Warning: make sure the lotto type and draw date above match the numbers you are entering. Change the date above first if needed.</div>
+      </div>
+    </div>
+    <div class="draw-entry-grid">
+      <div class="field"><label>Set 1</label><input type="number" id="w1"></div>
+      <div class="field"><label>Set 2</label><input type="number" id="w2"></div>
+      <div class="field"><label>Set 3</label><input type="number" id="w3"></div>
+      <div class="field"><label>Set 4</label><input type="number" id="w4"></div>
+      <div class="field"><label>Set 5</label><input type="number" id="w5"></div>
+      <div class="field"><label>Set 6</label><input type="number" id="w6"></div>
+      <button class="btn" id="btn-save-draw">Save Winning Numbers</button>
+    </div>
+    <div class="helper" id="draw-entry-mode">If numbers already exist for this lotto type and date, they will load here so you can update them.</div>
+    <div class="error hidden" id="draw-entry-error"></div>
   </div>
 
   <div class="summary-grid">
@@ -489,12 +514,18 @@ function applyInputRanges() {
   const rules = GAME_RULES[lotto];
   for (let i = 1; i <= 6; i++) {
     const manual = document.getElementById(`m${i}`);
+    const drawEntry = document.getElementById(`w${i}`);
     const perm = document.getElementById(`p${i}`);
     const max = (lotto === "FL" || i <= 5) ? rules.main_max : rules.bonus_max;
     if (manual) {
       manual.min = "1";
       manual.max = String(max);
       manual.placeholder = `1-${max}`;
+    }
+    if (drawEntry) {
+      drawEntry.min = "1";
+      drawEntry.max = String(max);
+      drawEntry.placeholder = `1-${max}`;
     }
     if (perm) {
       perm.placeholder = i <= 5 || lotto === "FL" ? `1-${rules.main_max}` : `1-${rules.bonus_max}`;
@@ -504,6 +535,19 @@ function applyInputRanges() {
 
 function parseManualNumbers() {
   return [1,2,3,4,5,6].map(i => Number(document.getElementById(`m${i}`).value));
+}
+
+function parseDrawEntryNumbers() {
+  return [1,2,3,4,5,6].map(i => Number(document.getElementById(`w${i}`).value));
+}
+
+function syncDrawEntryInputs(numbers) {
+  [1,2,3,4,5,6].forEach(i => {
+    const input = document.getElementById(`w${i}`);
+    if (!input) return;
+    const value = numbers?.[i - 1];
+    input.value = Number.isFinite(value) ? String(value) : "";
+  });
 }
 
 function parseBucketValues(value) {
@@ -574,6 +618,17 @@ function renderTickets(data) {
   document.getElementById("draw-status").textContent = data.actual_draw
     ? `${LOTTO_LABELS[currentLotto()]} winning numbers for ${formatUsDate(currentDate())}`
     : `No actual draw is stored yet for ${formatUsDate(currentDate())}.`;
+  const drawEntryMode = document.getElementById("draw-entry-mode");
+  const saveDrawBtn = document.getElementById("btn-save-draw");
+  if (data.actual_draw) {
+    syncDrawEntryInputs([data.actual_draw.Nbr1, data.actual_draw.Nbr2, data.actual_draw.Nbr3, data.actual_draw.Nbr4, data.actual_draw.Nbr5, data.actual_draw.Nbr6]);
+    drawEntryMode.textContent = "Stored winning numbers loaded below. Edit them and click Update Winning Numbers to correct them.";
+    saveDrawBtn.textContent = "Update Winning Numbers";
+  } else {
+    syncDrawEntryInputs([]);
+    drawEntryMode.textContent = "If numbers already exist for this lotto type and date, they will load here so you can update them.";
+    saveDrawBtn.textContent = "Save Winning Numbers";
+  }
 
   const winners = [];
   for (const row of data.tickets) {
@@ -708,8 +763,46 @@ async function savePermutations() {
   await loadTickets();
 }
 
+async function saveActualDraw() {
+  const error = document.getElementById("draw-entry-error");
+  error.classList.add("hidden");
+  const lotto = currentLotto();
+  const numbers = parseDrawEntryNumbers();
+  const validationMessage = validateClientNumbers(lotto, numbers);
+  if (validationMessage) {
+    error.textContent = validationMessage;
+    error.classList.remove("hidden");
+    return;
+  }
+
+  const normalized = normalizeNumbersForLotto(lotto, numbers);
+  const overwrite = document.getElementById("btn-save-draw").textContent.includes("Update");
+  const r = await fetch("/api/manual_draw", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      lotto,
+      draw_date: currentDate(),
+      numbers: normalized,
+      overwrite,
+    })
+  });
+  const data = await r.json();
+  if (!r.ok) {
+    error.textContent = data.error || "Could not save the winning numbers.";
+    error.classList.remove("hidden");
+    return;
+  }
+
+  error.textContent = `${data.updated ? "Updated" : "Saved"} winning numbers for ${formatUsDate(currentDate())}.`;
+  error.classList.remove("hidden");
+  compareMode = false;
+  await loadTickets();
+}
+
 document.getElementById("btn-save-ticket").addEventListener("click", saveManualTicket);
 document.getElementById("btn-generate").addEventListener("click", savePermutations);
+document.getElementById("btn-save-draw").addEventListener("click", saveActualDraw);
 document.getElementById("btn-compare").addEventListener("click", async () => {
   compareMode = true;
   await loadTickets();

@@ -573,6 +573,79 @@ def api_tickets_permutations():
     return jsonify({"saved": saved, "invalid": invalid, "duplicates": duplicates}), 201
 
 
+@app.route("/api/manual_draw", methods=["POST"])
+@login_required
+def api_manual_draw():
+    data = request.get_json(silent=True) or {}
+    lotto_type = (data.get("lotto") or "MM").strip().upper()
+    draw_date = (data.get("draw_date") or "").strip()
+    numbers = data.get("numbers") or []
+    overwrite = _parse_purchased_flag(data.get("overwrite", False))
+
+    if lotto_type not in LOTTO_LABELS:
+        return jsonify({"error": "Invalid lotto type"}), 400
+    if not draw_date:
+        return jsonify({"error": "draw_date required"}), 400
+    try:
+        date.fromisoformat(draw_date)
+    except ValueError:
+        return jsonify({"error": "Invalid draw date"}), 400
+    if not isinstance(numbers, list) or len(numbers) != 6:
+        return jsonify({"error": "Exactly 6 winning numbers are required"}), 400
+
+    try:
+        parsed = [int(n) for n in numbers]
+    except (TypeError, ValueError):
+        return jsonify({"error": "Numbers must be integers"}), 400
+
+    parsed = normalize_ticket_numbers(lotto_type, parsed)
+    ok, msg = validate_ticket_numbers(lotto_type, parsed)
+    if not ok:
+        return jsonify({"error": msg}), 400
+
+    existing = db.get_draw_by_date(lotto_type, draw_date)
+    if existing and not overwrite:
+        return jsonify({
+            "error": "Winning numbers for that lotto type and draw date already exist.",
+            "existing": existing,
+        }), 409
+
+    if existing:
+        saved = db.update_draw(
+            lotto_type,
+            draw_date,
+            parsed[0],
+            parsed[1],
+            parsed[2],
+            parsed[3],
+            parsed[4],
+            parsed[5],
+        )
+    else:
+        saved = db.insert_draw(
+            lotto_type,
+            draw_date,
+            parsed[0],
+            parsed[1],
+            parsed[2],
+            parsed[3],
+            parsed[4],
+            parsed[5],
+        )
+    if not saved:
+        return jsonify({"error": "Could not save the winning numbers."}), 500
+
+    _refresh_forecasts_for_lotto(lotto_type)
+
+    return jsonify({
+        "saved": True,
+        "updated": bool(existing),
+        "lotto": lotto_type,
+        "draw_date": draw_date,
+        "numbers": parsed,
+    }), 201
+
+
 @app.route("/api/tickets/<int:ticket_id>", methods=["DELETE"])
 @login_required
 def api_tickets_delete(ticket_id):

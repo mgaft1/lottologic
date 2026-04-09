@@ -127,6 +127,9 @@ VIEWER_REFRESH_RETRY_WINDOW = timedelta(minutes=10)
 _viewer_refresh_attempts: dict[str, datetime] = {}
 _viewer_refresh_state_lock = threading.Lock()
 _viewer_refresh_locks = {lt: threading.Lock() for lt in LOTTO_LABELS}
+TICKET_CLEANUP_INTERVAL = timedelta(minutes=30)
+_ticket_cleanup_lock = threading.Lock()
+_ticket_cleanup_last_run: datetime | None = None
 
 
 def _is_render_runtime() -> bool:
@@ -142,6 +145,33 @@ def _env_flag(name: str, default: bool) -> bool:
 
 def _now_local() -> datetime:
     return datetime.now(APP_TIMEZONE) if APP_TIMEZONE else datetime.now()
+
+
+def trigger_ticket_cleanup_async(force: bool = False) -> None:
+    """Keep ticket cleanup off the critical request path."""
+    global _ticket_cleanup_last_run
+
+    now_local = _now_local()
+    if not force and _ticket_cleanup_last_run and (now_local - _ticket_cleanup_last_run) < TICKET_CLEANUP_INTERVAL:
+        return
+    if _ticket_cleanup_lock.locked():
+        return
+
+    def _cleanup_job() -> None:
+        global _ticket_cleanup_last_run
+        if not _ticket_cleanup_lock.acquire(blocking=False):
+            return
+        try:
+            deleted = db_ticket_sim.purge_expired_tickets()
+            _ticket_cleanup_last_run = _now_local()
+            if deleted:
+                logger.info("Ticket cleanup removed %d expired ticket(s)", deleted)
+        except Exception as exc:
+            logger.warning("Ticket cleanup failed: %s", exc)
+        finally:
+            _ticket_cleanup_lock.release()
+
+    threading.Thread(target=_cleanup_job, name="ticket-cleanup", daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +470,7 @@ def home():
 @app.route("/tickets")
 @login_required
 def tickets_page():
-    db_ticket_sim.purge_expired_tickets()
+    trigger_ticket_cleanup_async()
     lotto_type = request.args.get("lotto", "MM")
     if lotto_type not in LOTTO_LABELS:
         lotto_type = "MM"
@@ -462,7 +492,7 @@ def tickets_page():
 @app.route("/api/tickets")
 @login_required
 def api_tickets_get():
-    db_ticket_sim.purge_expired_tickets()
+    trigger_ticket_cleanup_async()
     lotto_type = request.args.get("lotto", "MM")
     draw_date = request.args.get("draw_date")
     if not draw_date:
@@ -497,7 +527,7 @@ def api_tickets_get():
 @app.route("/api/tickets", methods=["POST"])
 @login_required
 def api_tickets_add():
-    db_ticket_sim.purge_expired_tickets()
+    trigger_ticket_cleanup_async()
     data = request.get_json(silent=True) or {}
     lotto_type = (data.get("lotto") or "MM").strip()
     draw_date = (data.get("draw_date") or "").strip()
@@ -533,7 +563,7 @@ def api_tickets_add():
 @app.route("/api/tickets/permutations", methods=["POST"])
 @login_required
 def api_tickets_permutations():
-    db_ticket_sim.purge_expired_tickets()
+    trigger_ticket_cleanup_async()
     data = request.get_json(silent=True) or {}
     lotto_type = (data.get("lotto") or "MM").strip()
     draw_date = (data.get("draw_date") or "").strip()
@@ -1214,7 +1244,7 @@ def initialize_runtime() -> None:
 
         db_links.init_links_schema()
         db_ticket_sim.init_ticket_schema()
-        db_ticket_sim.purge_expired_tickets()
+        trigger_ticket_cleanup_async(force=True)
 
         # Run the scraper on Render too so the persistent database does not
         # get stuck on an old latest draw date.

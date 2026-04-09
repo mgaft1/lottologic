@@ -177,6 +177,11 @@ input::placeholder {
   font-weight: bold;
   color: #1e1e2e;
 }
+#actual-balls .ball {
+  width: 38px;
+  height: 38px;
+  font-size: 1.35rem;
+}
 .controls-row {
   display: flex;
   gap: 8px;
@@ -277,7 +282,9 @@ td {
 }
 .error {
   color: #bf4d5d;
-  font-size: 0.84rem;
+  font-size: 1.28rem;
+  font-weight: 800;
+  line-height: 1.35;
 }
 .hidden { display: none !important; }
 @media (max-width: 1100px) {
@@ -419,6 +426,25 @@ td {
     <div class="ball-row" id="actual-balls"></div>
   </div>
 
+  <div class="panel hidden" id="purchased-panel">
+    <div class="section-head">
+      <div class="section-title">Purchased Tickets</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Numbers</th>
+          <th>Status</th>
+          <th>Price</th>
+          <th>Result</th>
+          <th class="win-header">Win</th>
+        </tr>
+      </thead>
+      <tbody id="purchased-body"></tbody>
+    </table>
+  </div>
+
   <div class="panel">
     <div class="section-head">
       <div class="section-title">Saved Tickets</div>
@@ -437,25 +463,6 @@ td {
         </tr>
       </thead>
       <tbody id="tickets-body"></tbody>
-    </table>
-  </div>
-
-  <div class="panel hidden" id="purchased-panel">
-    <div class="section-head">
-      <div class="section-title">Purchased Tickets</div>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Numbers</th>
-          <th>Status</th>
-          <th>Price</th>
-          <th>Result</th>
-          <th class="win-header">Win</th>
-        </tr>
-      </thead>
-      <tbody id="purchased-body"></tbody>
     </table>
   </div>
 
@@ -596,9 +603,9 @@ function validateClientNumbers(lotto, numbers) {
   const rules = GAME_RULES[lotto];
   if (numbers.some(n => !Number.isFinite(n))) return "Fill in all 6 number boxes.";
   const normalized = normalizeNumbersForLotto(lotto, numbers);
-  const seen = new Set(normalized);
-  if (seen.size !== normalized.length) return "Ticket numbers must all be different.";
   if (lotto === "FL") {
+    const seen = new Set(normalized);
+    if (seen.size !== normalized.length) return "Ticket numbers must all be different.";
     if (normalized.some(n => n < 1 || n > rules.main_max)) {
       return `Florida numbers must be between 1 and ${rules.main_max}.`;
     }
@@ -606,6 +613,9 @@ function validateClientNumbers(lotto, numbers) {
   }
   const main = normalized.slice(0, 5);
   const bonus = normalized[5];
+  if (new Set(main).size !== main.length) {
+    return "Main ticket numbers must all be different.";
+  }
   if (main.some(n => n < 1 || n > rules.main_max)) {
     return `Main numbers must be between 1 and ${rules.main_max}.`;
   }
@@ -706,7 +716,13 @@ function renderTickets(data) {
 
   document.querySelectorAll("[data-delete]").forEach(btn => {
     btn.addEventListener("click", async () => {
-      await fetch(`/api/tickets/${btn.dataset.delete}`, { method: "DELETE" });
+      btn.disabled = true;
+      const resp = await fetch(`/api/tickets/${btn.dataset.delete}`, { method: "POST" });
+      if (!resp.ok) {
+        btn.disabled = false;
+        alert("Could not delete the ticket. Please try again.");
+        return;
+      }
       await loadTickets();
     });
   });

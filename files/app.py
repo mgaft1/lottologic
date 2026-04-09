@@ -354,16 +354,17 @@ def validate_ticket_numbers(lotto_type: str, numbers: list[int]) -> tuple[bool, 
     if len(numbers) != required:
         return False, f"Exactly {required} numbers are required."
 
-    if len(set(numbers)) != len(numbers):
-        return False, "Ticket numbers must all be different."
-
     if lotto_type == "FL":
+        if len(set(numbers)) != len(numbers):
+            return False, "Ticket numbers must all be different."
         if any(n < 1 or n > rules["main_max"] for n in numbers):
             return False, f"Florida numbers must be between 1 and {rules['main_max']}."
         return True, ""
 
     main = numbers[:5]
     bonus = numbers[5]
+    if len(set(main)) != len(main):
+        return False, "Main ticket numbers must all be different."
     if any(n < 1 or n > rules["main_max"] for n in main):
         return False, f"Main numbers must be between 1 and {rules['main_max']}."
     if bonus < 1 or bonus > rules["bonus_max"]:
@@ -685,10 +686,12 @@ def api_manual_draw():
     }), 201
 
 
-@app.route("/api/tickets/<int:ticket_id>", methods=["DELETE"])
+@app.route("/api/tickets/<int:ticket_id>", methods=["DELETE", "POST"])
 @login_required
 def api_tickets_delete(ticket_id):
-    db_ticket_sim.delete_ticket(ticket_id)
+    deleted = db_ticket_sim.delete_ticket(ticket_id)
+    if not deleted:
+        return jsonify({"error": "Ticket not found"}), 404
     return jsonify({"deleted": ticket_id})
 
 

@@ -140,9 +140,10 @@ def add_ticket(lotto_type: str, draw_date: str, price: float, numbers: list[int]
         return int(cur.lastrowid)
 
 
-def delete_ticket(ticket_id: int) -> None:
+def delete_ticket(ticket_id: int) -> bool:
     with _conn() as con:
-        con.execute("DELETE FROM TicketSimSelections WHERE Id = ?", (ticket_id,))
+        cur = con.execute("DELETE FROM TicketSimSelections WHERE Id = ?", (ticket_id,))
+        return int(cur.rowcount or 0) > 0
 
 
 def update_ticket_status(ticket_id: int, purchased: bool) -> bool:

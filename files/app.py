@@ -245,34 +245,43 @@ def ensure_lotto_draws_current(lotto_type: str) -> None:
         _viewer_refresh_attempts[lotto_type] = now_local
 
     lock = _viewer_refresh_locks[lotto_type]
-    if not lock.acquire(blocking=False):
+    if lock.locked():
         logger.info("%s stale-data refresh already in progress", lotto_type)
         return
 
-    try:
-        _, latest_str = db.get_date_bounds(lotto_type)
-        latest_db = date.fromisoformat(latest_str) if latest_str else None
-        if latest_db and latest_db >= expected_latest:
+    def _refresh_job() -> None:
+        if not lock.acquire(blocking=False):
             return
+        try:
+            _, latest_str = db.get_date_bounds(lotto_type)
+            latest_db = date.fromisoformat(latest_str) if latest_str else None
+            if latest_db and latest_db >= expected_latest:
+                return
 
-        logger.info(
-            "%s latest draw stale on viewer request: db=%s expected=%s; refreshing",
-            lotto_type,
-            latest_db.isoformat() if latest_db else "none",
-            expected_latest.isoformat(),
-        )
-        refresh_summary = scraper.refresh_lotto_type(lotto_type)
-        logger.info("%s on-demand refresh summary: %s", lotto_type, refresh_summary)
+            logger.info(
+                "%s latest draw stale on viewer request: db=%s expected=%s; refreshing in background",
+                lotto_type,
+                latest_db.isoformat() if latest_db else "none",
+                expected_latest.isoformat(),
+            )
+            refresh_summary = scraper.refresh_lotto_type(lotto_type)
+            logger.info("%s on-demand refresh summary: %s", lotto_type, refresh_summary)
 
-        refresh_targets = [lotto_type]
-        if lotto_type in {"PB", "PD"}:
-            refresh_targets = ["PB", "PD"]
-        for target in refresh_targets:
-            _refresh_forecasts_for_lotto(target)
-    except Exception as exc:
-        logger.warning("%s on-demand viewer refresh failed: %s", lotto_type, exc)
-    finally:
-        lock.release()
+            refresh_targets = [lotto_type]
+            if lotto_type in {"PB", "PD"}:
+                refresh_targets = ["PB", "PD"]
+            for target in refresh_targets:
+                _refresh_forecasts_for_lotto(target)
+        except Exception as exc:
+            logger.warning("%s on-demand viewer refresh failed: %s", lotto_type, exc)
+        finally:
+            lock.release()
+
+    threading.Thread(
+        target=_refresh_job,
+        name=f"viewer-refresh-{lotto_type.lower()}",
+        daemon=True,
+    ).start()
 
 
 def default_ticket_draw_date(lotto_type: str, latest_draw: date) -> date:

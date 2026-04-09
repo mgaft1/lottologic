@@ -440,6 +440,25 @@ td {
     </table>
   </div>
 
+  <div class="panel hidden" id="purchased-panel">
+    <div class="section-head">
+      <div class="section-title">Purchased Tickets</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Numbers</th>
+          <th>Status</th>
+          <th>Price</th>
+          <th>Result</th>
+          <th class="win-header">Win</th>
+        </tr>
+      </thead>
+      <tbody id="purchased-body"></tbody>
+    </table>
+  </div>
+
   <div class="panel hidden" id="winners-panel">
     <div class="section-head">
       <div class="section-title">Winning Tickets</div>
@@ -520,15 +539,15 @@ function applyInputRanges() {
     if (manual) {
       manual.min = "1";
       manual.max = String(max);
-      manual.placeholder = `1-${max}`;
+      manual.placeholder = "";
     }
     if (drawEntry) {
       drawEntry.min = "1";
       drawEntry.max = String(max);
-      drawEntry.placeholder = `1-${max}`;
+      drawEntry.placeholder = "";
     }
     if (perm) {
-      perm.placeholder = i <= 5 || lotto === "FL" ? `1-${rules.main_max}` : `1-${rules.bonus_max}`;
+      perm.placeholder = "";
     }
   }
 }
@@ -604,9 +623,12 @@ async function loadTickets() {
 
 function renderTickets(data) {
   const body = document.getElementById("tickets-body");
+  const purchasedBody = document.getElementById("purchased-body");
+  const purchasedPanel = document.getElementById("purchased-panel");
   const winnersBody = document.getElementById("winners-body");
   const winnersPanel = document.getElementById("winners-panel");
   body.innerHTML = "";
+  purchasedBody.innerHTML = "";
   winnersBody.innerHTML = "";
 
   document.getElementById("sum-count").textContent = String(data.tickets.length);
@@ -631,6 +653,7 @@ function renderTickets(data) {
   }
 
   const winners = [];
+  const purchasedTickets = [];
   for (const row of data.tickets) {
     const cmp = row.comparison || {};
     const tr = document.createElement("tr");
@@ -646,7 +669,24 @@ function renderTickets(data) {
       <td><button class="btn btn-secondary" data-delete="${row.Id}">Delete</button></td>
     `;
     body.appendChild(tr);
+    if (row.Purchased) purchasedTickets.push(row);
     if (compareMode && cmp.is_winner) winners.push(row);
+  }
+
+  purchasedPanel.classList.toggle("hidden", purchasedTickets.length === 0);
+  for (const row of purchasedTickets) {
+    const cmp = row.comparison || {};
+    const tr = document.createElement("tr");
+    if (compareMode && cmp.is_winner) tr.className = "winner-row";
+    tr.innerHTML = `
+      <td>${row.Id}</td>
+      <td><div class="ticket-numbers">${ticketBallsHtml(row)}</div></td>
+      <td><span class="ticket-status purchased">Purchased</span></td>
+      <td>${formatMoney(row.TicketPrice)}</td>
+      <td>${compareMode ? (cmp.match_label || "-") : "-"}</td>
+      <td>${compareMode ? (cmp.win_amount != null ? `<span class="win-value">${formatMoney(cmp.win_amount)}</span>` : (cmp.is_winner ? `<span class="win-value">TBD</span>` : "-")) : "-"}</td>
+    `;
+    purchasedBody.appendChild(tr);
   }
 
   winnersPanel.classList.toggle("hidden", !compareMode || winners.length === 0);

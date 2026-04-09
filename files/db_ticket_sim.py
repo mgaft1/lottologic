@@ -161,7 +161,7 @@ def get_tickets(lotto_type: str, draw_date: str) -> list[dict]:
             SELECT Id, LottoType, DrawDate, Purchased, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6, CreatedAt
             FROM TicketSimSelections
             WHERE LottoType = ? AND DrawDate = ?
-            ORDER BY Id
+            ORDER BY Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, COALESCE(Nbr6, -1), Id
             """,
             (lotto_type, draw_date),
         ).fetchall()

@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 # look for a non-existent `files\\data` folder.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data"))
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response
 import db
 import db_forecast
 import db_selection
@@ -32,6 +32,7 @@ import links_fetcher
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+APP_BUILD = (os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("COMMIT_SHA") or "local")[:7]
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("LOTTO_SECRET", "change-me-in-production-32chars!!")
@@ -480,14 +481,24 @@ def tickets_page():
     latest = date.fromisoformat(latest_str) if latest_str else date.today()
     selected = parse_date_arg(request.args.get("draw_date"), default_ticket_draw_date(lotto_type, latest))
 
-    return render_template(
+    response = make_response(render_template(
         "tickets.html",
         lotto_type=lotto_type,
         draw_date=selected.isoformat(),
         lotto_types=list(LOTTO_LABELS.keys()),
         lotto_labels=LOTTO_LABELS,
         game_rules=TICKET_GAME_RULES,
-    )
+        app_build=APP_BUILD,
+    ))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
+@app.route("/api/build")
+def api_build():
+    return jsonify({"build": APP_BUILD})
 
 
 @app.route("/api/tickets")

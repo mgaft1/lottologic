@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -141,9 +142,16 @@ def add_ticket(lotto_type: str, draw_date: str, price: float, numbers: list[int]
 
 
 def delete_ticket(ticket_id: int) -> bool:
-    with _conn() as con:
-        cur = con.execute("DELETE FROM TicketSimSelections WHERE Id = ?", (ticket_id,))
-        return int(cur.rowcount or 0) > 0
+    for attempt in range(3):
+        try:
+            with _conn() as con:
+                cur = con.execute("DELETE FROM TicketSimSelections WHERE Id = ?", (ticket_id,))
+                return int(cur.rowcount or 0) > 0
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower() or attempt == 2:
+                raise
+            time.sleep(0.2 * (attempt + 1))
+    return False
 
 
 def update_ticket_status(ticket_id: int, purchased: bool) -> bool:

@@ -691,7 +691,8 @@ def api_manual_draw():
 def api_tickets_delete(ticket_id):
     deleted = db_ticket_sim.delete_ticket(ticket_id)
     if not deleted:
-        return jsonify({"error": "Ticket not found"}), 404
+        # Treat stale rows as effectively deleted so the UI can refresh cleanly.
+        return jsonify({"deleted": ticket_id, "missing": True})
     return jsonify({"deleted": ticket_id})
 
 
@@ -996,9 +997,13 @@ def api_selections():
 @login_required
 def gaps_page():
     lotto_type = request.args.get("lotto", "CA")
+    mode = request.args.get("mode", "directions")
+    if mode not in {"directions", "jumps"}:
+        mode = "directions"
     return render_template(
         "gaps.html",
         lotto_type=lotto_type,
+        gap_mode=mode,
         lotto_types=list(LOTTO_LABELS.keys()),
         lotto_labels=LOTTO_LABELS,
     )
@@ -1015,10 +1020,14 @@ def gaps_page():
 @login_required
 def api_gaps():
     lotto_type = request.args.get("lotto", "CA")
+    mode = request.args.get("mode", "directions")
     draws = db.get_all_draws(lotto_type)
     if not draws:
         return jsonify([])
-    matches = gap_engine.find_matches(draws)
+    if mode == "jumps":
+        matches = gap_engine.find_jump_matches(draws)
+    else:
+        matches = gap_engine.find_matches(draws)
     return jsonify(matches)
 
 

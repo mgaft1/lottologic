@@ -144,9 +144,59 @@ input::placeholder {
 }
 .perm-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr)) 180px 120px auto;
-  gap: 8px;
+  grid-template-columns: repeat(6, minmax(86px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+.bucket-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bucket-input-row {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.bucket-input-row input {
+  width: 58px;
+  min-width: 58px;
+  padding-left: 6px;
+  padding-right: 6px;
+  text-align: center;
+}
+.bucket-action {
+  min-width: 36px;
+  height: 38px;
+  padding: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.bucket-list {
+  width: 72px;
+  min-height: 132px;
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #9da5ad;
+  border-radius: 0;
+  font-size: 1.18rem;
+  font-weight: 700;
+  padding: 0;
+}
+.bucket-list option {
+  padding: 3px 6px;
+}
+.bucket-remove {
+  width: 72px;
+  padding: 5px 6px;
+  font-size: 0.9rem;
+}
+.perm-actions {
+  display: flex;
+  gap: 18px;
   align-items: end;
+  flex-wrap: wrap;
+  margin-top: 12px;
 }
 .helper {
   color: #000000;
@@ -342,6 +392,7 @@ td {
       <button class="btn" id="btn-save-draw">Save Winning Numbers</button>
     </div>
     <div class="helper" id="draw-entry-mode">If numbers already exist for this lotto type and date, they will load here so you can update them.</div>
+    <div class="helper" id="draw-entry-lock-note"></div>
     <div class="error hidden" id="draw-entry-error"></div>
   </div>
 
@@ -366,39 +417,22 @@ td {
 
   <div class="panel">
     <div class="section-head">
-      <div class="section-title">Manual Ticket Entry</div>
-    </div>
-    <div class="entry-grid">
-      <div class="field"><label>Set 1</label><input type="number" id="m1"></div>
-      <div class="field"><label>Set 2</label><input type="number" id="m2"></div>
-      <div class="field"><label>Set 3</label><input type="number" id="m3"></div>
-      <div class="field"><label>Set 4</label><input type="number" id="m4"></div>
-      <div class="field"><label>Set 5</label><input type="number" id="m5"></div>
-      <div class="field"><label>Set 6</label><input type="number" id="m6"></div>
-      <div class="field">
-        <label>Status</label>
-        <div class="status-group">
-          <label class="status-choice"><input type="radio" name="manual-status" value="purchased">Purchased</label>
-          <label class="status-choice"><input type="radio" name="manual-status" value="optional" checked>Optional</label>
-        </div>
-      </div>
-      <div class="field"><label>Price</label><input type="number" id="ticket-price" min="0" step="0.01"></div>
-      <button class="btn" id="btn-save-ticket">Save Ticket</button>
-    </div>
-    <div class="error hidden" id="manual-error"></div>
-  </div>
-
-  <div class="panel">
-    <div class="section-head">
-      <div class="section-title">Permutation Builder</div>
+      <div class="section-title">Manual Ticket Entry and Permutation Builder</div>
     </div>
     <div class="perm-grid">
-      <div class="field"><label>Set 1</label><input type="text" id="p1" placeholder="1"></div>
-      <div class="field"><label>Set 2</label><input type="text" id="p2" placeholder="6"></div>
-      <div class="field"><label>Set 3</label><input type="text" id="p3" placeholder="15"></div>
-      <div class="field"><label>Set 4</label><input type="text" id="p4" placeholder="30,32"></div>
-      <div class="field"><label>Set 5</label><input type="text" id="p5" placeholder="46,47"></div>
-      <div class="field"><label>Set 6</label><input type="text" id="p6" placeholder="12"></div>
+      {% for i in range(1, 7) %}
+      <div class="bucket-field">
+        <label>Set {{ i }}</label>
+        <div class="bucket-input-row">
+          <input type="number" id="p{{ i }}-input">
+          <button type="button" class="btn bucket-action" data-add-bucket="{{ i }}">+</button>
+        </div>
+        <select class="bucket-list" id="p{{ i }}" size="6"></select>
+        <button type="button" class="btn btn-secondary bucket-remove" data-remove-bucket="{{ i }}">Remove</button>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="perm-actions">
       <div class="field">
         <label>Status</label>
         <div class="status-group">
@@ -409,7 +443,7 @@ td {
       <div class="field"><label>Price</label><input type="number" id="perm-price" min="0" step="0.01"></div>
       <button class="btn" id="btn-generate">Generate + Save</button>
     </div>
-    <div class="helper" style="margin-top:10px;">Use commas to enter multiple choices for any set. Every valid permutation is saved as its own ticket.</div>
+    <div class="helper" style="margin-top:10px;">Enter a number for a set, click +, and repeat as needed. Every valid permutation is saved as its own ticket.</div>
     <div class="error hidden" id="perm-error"></div>
   </div>
 
@@ -501,6 +535,31 @@ function currentDate() {
   return document.getElementById("draw-date").value;
 }
 
+function selectedDrawReadyAt() {
+  return new Date(`${currentDate()}T20:00:00`);
+}
+
+function canEditWinningNumbers() {
+  const readyAt = selectedDrawReadyAt();
+  return Number.isFinite(readyAt.getTime()) && new Date() >= readyAt;
+}
+
+function updateWinningEntryLock() {
+  const allowed = canEditWinningNumbers();
+  [1,2,3,4,5,6].forEach(i => {
+    const input = document.getElementById(`w${i}`);
+    if (input) input.readOnly = !allowed;
+  });
+  const saveDrawBtn = document.getElementById("btn-save-draw");
+  saveDrawBtn.disabled = !allowed;
+  const lockNote = document.getElementById("draw-entry-lock-note");
+  if (lockNote) {
+    lockNote.textContent = allowed
+      ? "Winning numbers may be entered or corrected for this draw date."
+      : "Winning-number entry opens at 8:00 PM on the selected draw date.";
+  }
+}
+
 function formatUsDate(dateStr) {
   if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || "";
   const [y, m, d] = dateStr.split("-");
@@ -531,7 +590,6 @@ function actualBallsHtml(draw) {
 
 function applyDefaultPrices() {
   const base = GAME_RULES[currentLotto()].base_price || 0;
-  document.getElementById("ticket-price").value = base.toFixed(2);
   document.getElementById("perm-price").value = base.toFixed(2);
 }
 
@@ -541,7 +599,7 @@ function applyInputRanges() {
   for (let i = 1; i <= 6; i++) {
     const manual = document.getElementById(`m${i}`);
     const drawEntry = document.getElementById(`w${i}`);
-    const perm = document.getElementById(`p${i}`);
+    const permInput = document.getElementById(`p${i}-input`);
     const max = (lotto === "FL" || i <= 5) ? rules.main_max : rules.bonus_max;
     if (manual) {
       manual.min = "1";
@@ -553,14 +611,13 @@ function applyInputRanges() {
       drawEntry.max = String(max);
       drawEntry.placeholder = "";
     }
-    if (perm) {
-      perm.placeholder = "";
+    if (permInput) {
+      permInput.min = "1";
+      permInput.max = String(max);
+      permInput.placeholder = "";
     }
   }
-}
-
-function parseManualNumbers() {
-  return [1,2,3,4,5,6].map(i => Number(document.getElementById(`m${i}`).value));
+  updateWinningEntryLock();
 }
 
 function parseDrawEntryNumbers() {
@@ -576,12 +633,46 @@ function syncDrawEntryInputs(numbers) {
   });
 }
 
-function parseBucketValues(value) {
-  return value
-    .split(",")
-    .map(v => v.trim())
-    .filter(Boolean)
-    .map(v => Number(v));
+function getBucketValues(setIndex) {
+  const list = document.getElementById(`p${setIndex}`);
+  return Array.from(list.options).map(option => Number(option.value));
+}
+
+function addBucketValue(setIndex) {
+  const error = document.getElementById("perm-error");
+  error.classList.add("hidden");
+  const lotto = currentLotto();
+  const rules = GAME_RULES[lotto];
+  const input = document.getElementById(`p${setIndex}-input`);
+  const list = document.getElementById(`p${setIndex}`);
+  const value = Number(input.value);
+  const max = (lotto === "FL" || setIndex <= 5) ? rules.main_max : rules.bonus_max;
+  if (!Number.isInteger(value) || value < 1 || value > max) {
+    error.textContent = setIndex <= 5 || lotto === "FL"
+      ? `Set ${setIndex} numbers must be between 1 and ${rules.main_max}.`
+      : `Set ${setIndex} numbers must be between 1 and ${rules.bonus_max}.`;
+    error.classList.remove("hidden");
+    return;
+  }
+  if (Array.from(list.options).some(option => Number(option.value) === value)) {
+    error.textContent = `Set ${setIndex} already includes ${value}.`;
+    error.classList.remove("hidden");
+    return;
+  }
+  const option = document.createElement("option");
+  option.value = String(value);
+  option.textContent = String(value);
+  list.appendChild(option);
+  Array.from(list.options)
+    .sort((a, b) => Number(a.value) - Number(b.value))
+    .forEach(option => list.appendChild(option));
+  input.value = "";
+  input.focus();
+}
+
+function removeSelectedBucketValue(setIndex) {
+  const list = document.getElementById(`p${setIndex}`);
+  Array.from(list.selectedOptions).forEach(option => option.remove());
 }
 
 function normalizeNumbersForLotto(lotto, numbers) {
@@ -590,13 +681,6 @@ function normalizeNumbersForLotto(lotto, numbers) {
   }
   const main = [...numbers.slice(0, 5)].sort((a, b) => a - b);
   return [...main, numbers[5]];
-}
-
-function syncManualInputs(numbers) {
-  numbers.forEach((n, i) => {
-    const input = document.getElementById(`m${i + 1}`);
-    if (input) input.value = Number.isFinite(n) ? String(n) : "";
-  });
 }
 
 function validateClientNumbers(lotto, numbers) {
@@ -661,6 +745,7 @@ function renderTickets(data) {
     drawEntryMode.textContent = "If numbers already exist for this lotto type and date, they will load here so you can update them.";
     saveDrawBtn.textContent = "Save Winning Numbers";
   }
+  updateWinningEntryLock();
 
   const winners = [];
   const purchasedTickets = [];
@@ -717,7 +802,10 @@ function renderTickets(data) {
   document.querySelectorAll("[data-delete]").forEach(btn => {
     btn.addEventListener("click", async () => {
       btn.disabled = true;
-      const resp = await fetch(`/api/tickets/${btn.dataset.delete}`, { method: "POST" });
+      let resp = await fetch(`/api/tickets/${btn.dataset.delete}`, { method: "POST" });
+      if (!resp.ok) {
+        resp = await fetch(`/api/tickets/${btn.dataset.delete}`, { method: "DELETE" });
+      }
       if (!resp.ok) {
         btn.disabled = false;
         alert("Could not delete the ticket. Please try again.");
@@ -739,47 +827,13 @@ function renderTickets(data) {
   });
 }
 
-async function saveManualTicket() {
-  const error = document.getElementById("manual-error");
-  error.classList.add("hidden");
-  const lotto = currentLotto();
-  const numbers = parseManualNumbers();
-  const validationMessage = validateClientNumbers(lotto, numbers);
-  if (validationMessage) {
-    error.textContent = validationMessage;
-    error.classList.remove("hidden");
-    return;
-  }
-  const normalized = normalizeNumbersForLotto(lotto, numbers);
-  syncManualInputs(normalized);
-  const r = await fetch("/api/tickets", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      lotto,
-      draw_date: currentDate(),
-      numbers: normalized,
-      price: Number(document.getElementById("ticket-price").value || 0),
-      purchased: currentStatus("manual-status") === "purchased",
-    })
-  });
-  const data = await r.json();
-  if (!r.ok) {
-    error.textContent = data.error || "Could not save ticket.";
-    error.classList.remove("hidden");
-    return;
-  }
-  [1,2,3,4,5,6].forEach(i => document.getElementById(`m${i}`).value = "");
-  await loadTickets();
-}
-
 async function savePermutations() {
   const error = document.getElementById("perm-error");
   error.classList.add("hidden");
   const lotto = currentLotto();
-  const buckets = [1,2,3,4,5,6].map(i => parseBucketValues(document.getElementById(`p${i}`).value));
+  const buckets = [1,2,3,4,5,6].map(i => getBucketValues(i));
   if (buckets.some(b => !b.length || b.some(n => !Number.isFinite(n)))) {
-    error.textContent = "Each permutation field needs one or more comma-separated numbers.";
+    error.textContent = "Each set needs at least one number in its list.";
     error.classList.remove("hidden");
     return;
   }
@@ -822,6 +876,11 @@ async function savePermutations() {
 async function saveActualDraw() {
   const error = document.getElementById("draw-entry-error");
   error.classList.add("hidden");
+  if (!canEditWinningNumbers()) {
+    error.textContent = "Winning-number entry opens at 8:00 PM on the selected draw date.";
+    error.classList.remove("hidden");
+    return;
+  }
   const lotto = currentLotto();
   const numbers = parseDrawEntryNumbers();
   const validationMessage = validateClientNumbers(lotto, numbers);
@@ -856,9 +915,23 @@ async function saveActualDraw() {
   await loadTickets();
 }
 
-document.getElementById("btn-save-ticket").addEventListener("click", saveManualTicket);
 document.getElementById("btn-generate").addEventListener("click", savePermutations);
 document.getElementById("btn-save-draw").addEventListener("click", saveActualDraw);
+document.querySelectorAll("[data-add-bucket]").forEach(btn => {
+  btn.addEventListener("click", () => addBucketValue(Number(btn.dataset.addBucket)));
+});
+document.querySelectorAll("[data-remove-bucket]").forEach(btn => {
+  btn.addEventListener("click", () => removeSelectedBucketValue(Number(btn.dataset.removeBucket)));
+});
+document.querySelectorAll("[id$='-input']").forEach(input => {
+  if (!/^p[1-6]-input$/.test(input.id)) return;
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addBucketValue(Number(input.id.match(/^p([1-6])-/)[1]));
+    }
+  });
+});
 document.getElementById("btn-compare").addEventListener("click", async () => {
   compareMode = true;
   await loadTickets();
@@ -867,6 +940,7 @@ document.getElementById("btn-load").addEventListener("click", () => {
   const q = new URLSearchParams({ lotto: currentLotto(), draw_date: currentDate() });
   window.location.href = `/tickets?${q.toString()}`;
 });
+document.getElementById("draw-date").addEventListener("change", updateWinningEntryLock);
 document.getElementById("sel-lotto").addEventListener("change", () => {
   const q = new URLSearchParams({ lotto: currentLotto() });
   window.location.href = `/tickets?${q.toString()}`;
@@ -874,6 +948,7 @@ document.getElementById("sel-lotto").addEventListener("change", () => {
 
 applyDefaultPrices();
 applyInputRanges();
+setInterval(updateWinningEntryLock, 60000);
 loadTickets();
 </script>
 </body>

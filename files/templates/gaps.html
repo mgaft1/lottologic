@@ -8,19 +8,19 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: Arial, sans-serif;
-  background: #1e1e2e; color: #cdd6f4;
+  background: #ffffff; color: #000000;
   min-height: 100vh; display: flex; flex-direction: column;
 }
 
 /* ── Navbar ── */
 #navbar {
-  background: #181825; border-bottom: 1px solid #313244;
+  background: #f5f6f8; border-bottom: 1px solid #d3d7de;
   padding: 8px 16px; display: flex; align-items: center; gap: 12px;
   flex-shrink: 0;
 }
 #navbar a { text-decoration: none; }
 #navbar a:not(.nav-logout) {
-  color: #ffffff;
+  color: #000000;
   font-size: 1.38rem;
   font-weight: bold;
   padding: 7px 14px;
@@ -31,8 +31,22 @@ body {
 }
 #navbar a:not(.nav-logout):hover { background: #3d7cf0; }
 #navbar select {
-  background: #313244; color: #cdd6f4; border: 1px solid #45475a;
-  padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 1rem;
+  background: #ffffff; color: #000000; border: 1px solid #9da5ad;
+  padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 1.5rem;
+  font-weight: 700;
+}
+.mode-choice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #000000;
+  font-size: 1.18rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mode-choice input {
+  width: 18px;
+  height: 18px;
 }
 .nav-logout {
   margin-left: auto;
@@ -45,72 +59,93 @@ body {
 
 /* ── Section headers ── */
 .section-title {
-  font-size: 0.78rem; color: #6c7086; text-transform: uppercase;
+  font-size: 1.08rem; color: #000000; text-transform: uppercase;
+  font-weight: 700;
   letter-spacing: 0.05em; margin-bottom: 6px;
 }
 
 /* ── Current draw card ── */
 #current-card {
-  background: #181825; border: 1px solid #313244; border-radius: 6px;
+  background: #ffffff; border: 1px solid #d9dde3; border-radius: 6px;
   padding: 12px 16px;
 }
-#current-card .draw-date { font-size: 0.82rem; color: #a6adc8; margin-bottom: 6px; }
+#curr-date {
+  margin-left: 10px;
+  font-size: 1.12rem;
+  font-weight: 700;
+}
 .ball-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .ball {
-  width: 32px; height: 32px; border-radius: 50%;
+  width: 40px; height: 40px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 0.78rem; font-weight: bold; color: #1e1e2e;
+  font-size: 1.08rem; font-weight: bold; color: #1e1e2e;
+}
+.table-ball {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 900;
+  margin-right: 5px;
 }
 .gap-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 .gap-chip {
-  min-width: 32px; height: 20px; border-radius: 3px;
+  min-width: 42px; height: 28px; border-radius: 3px;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 0.72rem; font-weight: bold; padding: 0 5px;
+  font-size: 1rem; font-weight: bold; padding: 0 8px;
 }
 .gap-up   { background: #a6e3a1; color: #1e1e2e; }
 .gap-down { background: #f38ba8; color: #1e1e2e; }
-.gap-flat { background: #45475a; color: #cdd6f4; }
-.pos-label { font-size: 0.7rem; color: #6c7086; min-width: 32px; text-align: center; }
+.gap-flat { background: #d8dde5; color: #000000; }
+.jump-chip {
+  min-width: 42px; height: 28px; border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #e9edf3; color: #000000;
+  font-size: 1rem; font-weight: 900; padding: 0 8px;
+}
+.pos-label { font-size: 1rem; color: #000000; min-width: 42px; text-align: center; }
 
 /* ── Matches table ── */
 #matches-section { flex: 1; }
 #matches-table {
-  width: 100%; border-collapse: collapse; font-size: 0.82rem;
+  width: 100%; border-collapse: collapse; font-size: 1.12rem;
 }
 #matches-table th {
-  background: #181825; color: #6c7086; font-weight: normal;
-  padding: 6px 10px; text-align: left; border-bottom: 1px solid #313244;
-  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+  background: #f5f6f8; color: #000000; font-weight: normal;
+  padding: 6px 10px; text-align: left; border-bottom: 1px solid #d9dde3;
+  font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.04em;
 }
-#matches-table td { padding: 8px 10px; border-bottom: 1px solid #24243a; vertical-align: top; }
+#matches-table td { padding: 8px 10px; border-bottom: 1px solid #e4e8ed; vertical-align: top; color: #000000; }
 .match-row { cursor: pointer; }
-.match-row:hover td { background: #24243a; }
-.match-row.active td { background: #2a2a3e; }
+.match-row:hover td { background: #eef3fb; }
+.match-row.active td { background: #e3ecff; }
 .match-row.dimmed { opacity: 0.35; cursor: default; }
 .match-row.dimmed:hover td { background: transparent; }
 
 .strength-badge {
   display: inline-block; padding: 2px 7px; border-radius: 10px;
-  font-size: 0.72rem; font-weight: bold;
+  font-size: 1.02rem; font-weight: bold;
 }
 .s5 { background: #cba6f7; color: #1e1e2e; }
 .s4 { background: #89b4fa; color: #1e1e2e; }
-.s3 { background: #45475a; color: #cdd6f4; }
+.s3 { background: #d8dde5; color: #000000; }
 
 .pos-tag {
-  display: inline-block; background: #313244; border-radius: 3px;
-  padding: 1px 5px; font-size: 0.7rem; color: #a6adc8; margin: 1px;
+  display: inline-block; background: #e9edf3; border-radius: 3px;
+  padding: 2px 7px; font-size: 1rem; color: #000000; margin: 1px;
 }
 
 /* ── Overlay panel ── */
 #overlay-panel {
   display: none;
-  background: #181825; border: 1px solid #313244; border-radius: 6px;
+  background: #ffffff; border: 1px solid #d9dde3; border-radius: 6px;
   padding: 14px 16px;
 }
 #overlay-panel.visible { display: block; }
-#overlay-title { font-size: 0.88rem; color: #89b4fa; margin-bottom: 10px; }
-
 .overlay-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
 }
@@ -120,41 +155,48 @@ body {
 
 .overlay-col { }
 .overlay-col-title {
-  font-size: 0.72rem; color: #6c7086; text-transform: uppercase;
+  font-size: 1.02rem; color: #000000; text-transform: uppercase;
+  font-weight: 700;
   letter-spacing: 0.04em; margin-bottom: 6px;
 }
-
 /* projected movement */
 .proj-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .proj-chip {
   min-width: 38px; padding: 3px 6px; border-radius: 3px; text-align: center;
-  font-size: 0.75rem; font-weight: bold;
+  font-size: 1.05rem; font-weight: bold;
 }
 .proj-up   { background: #a6e3a1; color: #1e1e2e; }
 .proj-down { background: #f38ba8; color: #1e1e2e; }
-.proj-flat { background: #45475a; color: #cdd6f4; }
+.proj-flat { background: #d8dde5; color: #000000; }
 
 /* projection grid — matches screenshot layout */
 .proj-grid-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 3px 0; border-bottom: 1px solid #24243a;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 3px 0; border-bottom: none;
 }
 .proj-grid-row:last-child { border-bottom: none; }
 .proj-grid-label {
-  font-size: 0.75rem; color: #a6adc8; min-width: 38px;
+  font-size: 1.05rem; color: #000000; min-width: 38px;
+  text-align: center;
 }
 .proj-grid-val {
   min-width: 42px; padding: 3px 10px; border-radius: 3px;
-  font-size: 0.85rem; font-weight: bold; text-align: center;
+  font-size: 1.15rem; font-weight: bold; text-align: center;
+}
+#ov-proj-grid {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 .proj-main  { background: #f38ba8; color: #1e1e2e; }
 .proj-bonus { background: #cba6f7; color: #1e1e2e; }
 
 /* ── Set checkboxes toolbar ── */
 #set-toolbar {
-  background: #181825; border-bottom: 1px solid #313244;
+  background: #ffffff; border-bottom: 1px solid #d3d7de;
   padding: 6px 16px; display: flex; align-items: center; gap: 12px;
-  font-size: 0.82rem; color: #a6adc8; flex-shrink: 0;
+  font-size: 1.12rem; color: #000000; flex-shrink: 0;
 }
 #set-toolbar label { display:flex; align-items:center; gap:4px; cursor:pointer; }
 #set-toolbar input[type=checkbox] { cursor:pointer; }
@@ -162,24 +204,24 @@ body {
 /* ── Mini-chart panel ── */
 #minichart-panel {
   display: none;
-  background: #181825; border: 1px solid #313244; border-radius: 6px;
+  background: #ffffff; border: 1px solid #d9dde3; border-radius: 6px;
   padding: 10px 14px;
 }
 #minichart-panel.visible { display: block; }
-#minichart-title { font-size: 0.78rem; color: #6c7086; margin-bottom: 8px; }
+#minichart-title { font-size: 1.08rem; color: #000000; margin-bottom: 8px; }
 #minichart-wrap {
   display: flex; gap: 0; align-items: stretch;
 }
 .mc-canvas-col { flex: 1; }
-.mc-label { font-size: 0.7rem; color: #6c7086; text-align: center; margin-bottom: 3px; }
+.mc-label { font-size: 1rem; color: #000000; text-align: center; margin-bottom: 3px; }
 #mc-yaxis {
   width: 32px; flex-shrink: 0;
   display: flex; flex-direction: column; justify-content: space-between;
-  padding: 4px 0; font-size: 0.65rem; color: #6c7086; text-align: right;
+  padding: 4px 0; font-size: 0.95rem; color: #000000; text-align: right;
 }
 canvas.mc-canvas {
-  display: block; width: 100%; background: #24243a;
-  border-radius: 4px; border: 1px solid #313244;
+  display: block; width: 100%; background: #f5f6f8;
+  border-radius: 4px; border: 1px solid #d9dde3;
 }
 </style>
 </head>
@@ -192,8 +234,8 @@ canvas.mc-canvas {
   <a href="/gaps">Time Gaps</a>
   <a href="/tickets">Predictions</a>
   <a href="/links">Links</a>
-  <span style="color:#45475a;">|</span>
-  <span style="color:#a6adc8;">Gaps:</span>
+  <span style="color:#000000;">|</span>
+  <span style="color:#000000;">Lotto Type</span>
   <select id="sel-lotto">
     {% for lt in lotto_types %}
     <option value="{{ lt }}" {% if lt == lotto_type %}selected{% endif %}>
@@ -201,6 +243,8 @@ canvas.mc-canvas {
     </option>
     {% endfor %}
   </select>
+  <label class="mode-choice"><input type="radio" name="gap-mode" value="directions" {% if gap_mode == "directions" %}checked{% endif %}> Directions</label>
+  <label class="mode-choice"><input type="radio" name="gap-mode" value="jumps" {% if gap_mode == "jumps" %}checked{% endif %}> Jumps</label>
   <a href="/logout" class="nav-logout">Sign out</a>
 </div>
 
@@ -218,18 +262,13 @@ canvas.mc-canvas {
 
   <!-- Current draw -->
   <div id="current-card">
-    <div class="section-title">Current draw</div>
-    <div class="draw-date" id="curr-date">—</div>
+    <div class="section-title">Current draw <span id="curr-date"></span></div>
     <div class="ball-row" id="curr-balls"></div>
-    <div style="margin-top:8px;">
-      <div class="section-title">Gap from previous draw</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;" id="curr-gap-row"></div>
-    </div>
   </div>
 
   <!-- Matches -->
   <div id="matches-section">
-    <div class="section-title">Historical gap matches</div>
+    <div class="section-title" id="matches-title">Historical gap matches</div>
     <div id="loading">Loading…</div>
     <div id="no-matches" style="display:none;">No matches found for this lotto type.</div>
     <table id="matches-table" style="display:none;">
@@ -239,7 +278,7 @@ canvas.mc-canvas {
           <th>Anchor draw</th>
           <th>Date</th>
           <th>Strength</th>
-          <th>Matched positions</th>
+          <th id="matched-header">Matched positions</th>
           <th>Anchor numbers</th>
         </tr>
       </thead>
@@ -249,12 +288,11 @@ canvas.mc-canvas {
 
   <!-- Overlay panel -->
   <div id="overlay-panel">
-    <div id="overlay-title"></div>
     <div class="overlay-grid">
       <div class="overlay-col">
-        <div class="overlay-col-title">Historical anchor draw</div>
+        <div class="overlay-col-title">Historical anchor draw <span id="ov-anchor-date"></span></div>
         <div class="ball-row" id="ov-anchor-balls"></div>
-        <div class="section-title" style="margin-top:8px;">Gap direction</div>
+        <div class="section-title" style="margin-top:8px;" id="anchor-pattern-title">Gap direction</div>
         <div class="gap-row" id="ov-anchor-gap"></div>
       </div>
       <div class="overlay-col">
@@ -277,13 +315,13 @@ canvas.mc-canvas {
       <div class="mc-canvas-col">
         <div class="mc-label" id="mc-label-hist">Historical context</div>
         <canvas class="mc-canvas" id="mc-hist" height="220"></canvas>
-        <div id="mc-xaxis-hist" style="display:flex;justify-content:space-between;font-size:0.6rem;color:#6c7086;margin-top:2px;padding:0 2px;"></div>
+        <div id="mc-xaxis-hist" style="display:flex;justify-content:space-between;font-size:0.9rem;color:#000000;margin-top:2px;padding:0 2px;"></div>
       </div>
       <div id="mc-yaxis"></div>
       <div class="mc-canvas-col">
         <div class="mc-label" id="mc-label-curr">Current context</div>
         <canvas class="mc-canvas" id="mc-curr" height="220"></canvas>
-        <div id="mc-xaxis-curr" style="display:flex;justify-content:space-between;font-size:0.6rem;color:#6c7086;margin-top:2px;padding:0 2px;"></div>
+        <div id="mc-xaxis-curr" style="display:flex;justify-content:space-between;font-size:0.9rem;color:#000000;margin-top:2px;padding:0 2px;"></div>
       </div>
     </div>
   </div>
@@ -296,6 +334,7 @@ canvas.mc-canvas {
 const SET_COLORS = ["#89b4fa","#a6e3a1","#fab387","#f9e2af","#cba6f7","#f38ba8"];
 let S = {
   lotto:   "{{ lotto_type }}",
+  mode:    "{{ gap_mode }}",
   matches: [],
   draws:   [],   // raw draws from /api/draws (last few)
   active:  null, // currently selected match index
@@ -337,6 +376,13 @@ function makeDeltaChip(v) {
   return c;
 }
 
+function makeJumpChip(v) {
+  const c = document.createElement("div");
+  c.className = "jump-chip";
+  c.textContent = v;
+  return c;
+}
+
 function formatDisplayDate(dateStr) {
   if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr || "";
   const [yyyy, mm, dd] = dateStr.split("-");
@@ -350,37 +396,15 @@ function renderCurrent(draws) {
   const curr = draws[draws.length - 1];
   const prev = draws.length > 1 ? draws[draws.length - 2] : null;
 
-  document.getElementById("curr-date").textContent =
-    `Draw #${curr.DrawIndex}  —  ${curr.DrawDate}`;
-
   const ballRow = document.getElementById("curr-balls");
   document.getElementById("curr-date").textContent =
-    `Draw #${curr.DrawIndex}  -  ${formatDisplayDate(curr.DrawDate)}`;
+    formatDisplayDate(curr.DrawDate);
   ballRow.innerHTML = "";
   for (let s = 1; s <= 6; s++) {
     const v = curr[`Nbr${s}`];
     if (v != null) ballRow.appendChild(makeBall(v, s - 1));
   }
 
-  const gapRow = document.getElementById("curr-gap-row");
-  gapRow.innerHTML = "";
-  if (prev) {
-    for (let s = 1; s <= 5; s++) {
-      const wrap = document.createElement("div");
-      wrap.style.display = "flex";
-      wrap.style.flexDirection = "column";
-      wrap.style.alignItems = "center";
-      wrap.style.gap = "2px";
-      const lbl = document.createElement("div");
-      lbl.className = "pos-label";
-      lbl.textContent = `P${s}`;
-      wrap.appendChild(lbl);
-      wrap.appendChild(makeGapChip(curr[`Nbr${s}`] - prev[`Nbr${s}`]));
-      gapRow.appendChild(wrap);
-    }
-  } else {
-    gapRow.textContent = "—";
-  }
 }
 
 // ── Render matches table ──────────────────────────────────────────────────────
@@ -393,6 +417,13 @@ function renderTable(matches) {
 
   loading.style.display = "none";
   tbody.innerHTML = "";
+  const isJumps = S.mode === "jumps";
+  document.getElementById("matches-title").textContent = isJumps
+    ? "Historical jump matches"
+    : "Historical gap matches";
+  document.getElementById("matched-header").textContent = isJumps
+    ? "Matched jumps"
+    : "Matched positions";
 
   if (!matches.length) {
     noMatch.style.display = "block";
@@ -414,20 +445,20 @@ function renderTable(matches) {
 
     // positions tags
     const posTags = m.matched_positions
-      .map(p => `<span class="pos-tag">P${p}</span>`).join(" ");
+      .map(p => `<span class="pos-tag">${isJumps ? "J" : "P"}${p}</span>`).join(" ");
 
     // anchor numbers
     const anchorNums = [1,2,3,4,5].map(s =>
-      `<span style="color:${SET_COLORS[s-1]};font-weight:bold;">${m.anchor_draw[`Nbr${s}`] ?? "?"}</span>`
-    ).join(" · ");
+      `<span class="table-ball" style="background:${SET_COLORS[s-1]};color:#000000;">${m.anchor_draw[`Nbr${s}`] ?? "?"}</span>`
+    ).join("");
 
     tr.innerHTML = `
-      <td style="color:#6c7086;">${i + 1}</td>
+      <td style="color:#000000;">${i + 1}</td>
       <td style="font-weight:bold;">#${m.anchor_index}</td>
-      <td style="color:#a6adc8;">${m.anchor_date}</td>
-      <td><span class="strength-badge ${sc}">${m.match_strength}-gap</span></td>
+      <td style="color:#000000;">${m.anchor_date}</td>
+      <td><span class="strength-badge ${sc}">${m.match_strength}-${isJumps ? "jump" : "gap"}</span></td>
       <td>${posTags}</td>
-      <td style="font-size:0.78rem;">${anchorNums}</td>
+      <td style="font-size:1.08rem;">${anchorNums}</td>
     `;
     tr.innerHTML = tr.innerHTML.replace(m.anchor_date, formatDisplayDate(m.anchor_date));
 
@@ -518,12 +549,8 @@ function selectMatch(idx) {
   const panel = document.getElementById("overlay-panel");
   panel.classList.add("visible");
 
-  document.getElementById("overlay-title").textContent =
-    `Match #${idx + 1} — Anchor draw #${m.anchor_index} (${m.anchor_date})`;
-
   // Anchor balls
-  document.getElementById("overlay-title").textContent =
-    `Match #${idx + 1} - Anchor draw #${m.anchor_index} (${formatDisplayDate(m.anchor_date)})`;
+  document.getElementById("ov-anchor-date").textContent = formatDisplayDate(m.anchor_date);
   const anchorBalls = document.getElementById("ov-anchor-balls");
   anchorBalls.innerHTML = "";
   for (let s = 1; s <= 6; s++) {
@@ -531,17 +558,19 @@ function selectMatch(idx) {
     if (v != null) anchorBalls.appendChild(makeBall(v, s - 1));
   }
 
-  // Anchor gap direction (sets 1-5)
+  // Anchor pattern details
   const anchorGap = document.getElementById("ov-anchor-gap");
   anchorGap.innerHTML = "";
+  document.getElementById("anchor-pattern-title").textContent =
+    S.mode === "jumps" ? "Jumps" : "Gap direction";
   m.gap_vector.forEach((v, i) => {
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;";
     const lbl = document.createElement("div");
     lbl.className = "pos-label";
-    lbl.textContent = `P${i + 1}`;
+    lbl.textContent = `${S.mode === "jumps" ? "J" : "P"}${i + 1}`;
     wrap.appendChild(lbl);
-    wrap.appendChild(makeGapChip(v));
+    wrap.appendChild(S.mode === "jumps" ? makeJumpChip(v) : makeGapChip(v));
     anchorGap.appendChild(wrap);
   });
 
@@ -610,7 +639,7 @@ async function load() {
   renderCurrent(S.draws);
 
   // Fetch gap matches
-  const mr = await fetch(`/api/gaps?lotto=${S.lotto}`);
+  const mr = await fetch(`/api/gaps?lotto=${S.lotto}&mode=${S.mode}`);
   S.matches = await mr.json();
   renderTable(S.matches);
 }
@@ -619,8 +648,16 @@ async function load() {
 
 document.getElementById("sel-lotto").addEventListener("change", function() {
   S.lotto = this.value;
-  window.history.replaceState({}, "", `/gaps?lotto=${S.lotto}`);
+  window.history.replaceState({}, "", `/gaps?lotto=${S.lotto}&mode=${S.mode}`);
   load();
+});
+
+document.querySelectorAll("input[name='gap-mode']").forEach(radio => {
+  radio.addEventListener("change", () => {
+    S.mode = document.querySelector("input[name='gap-mode']:checked").value;
+    window.history.replaceState({}, "", `/gaps?lotto=${S.lotto}&mode=${S.mode}`);
+    load();
+  });
 });
 
 // ── Visible sets ─────────────────────────────────────────────────────────────
@@ -692,9 +729,9 @@ function drawMiniCanvas(canvasEl, draws, visibleSets, scale, blackFrom, blackTo)
   const n = draws.length;
 
   // Background grid
-  ctx.fillStyle = "#24243a";
+  ctx.fillStyle = "#f5f6f8";
   ctx.fillRect(0, 0, w, CANVAS_H);
-  ctx.strokeStyle = "#313244";
+  ctx.strokeStyle = "#d9dde3";
   ctx.lineWidth = 0.5;
   const gridLines = 6;
   for (let g = 0; g <= gridLines; g++) {
@@ -710,7 +747,7 @@ function drawMiniCanvas(canvasEl, draws, visibleSets, scale, blackFrom, blackTo)
   for (const s of visibleSets) {
     const color = SET_COLORS[s - 1];
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 3.5;
     ctx.beginPath();
     let started = false;
     for (let i = 0; i < n; i++) {
@@ -729,7 +766,7 @@ function drawMiniCanvas(canvasEl, draws, visibleSets, scale, blackFrom, blackTo)
       if (v == null) continue;
       const x = xPx(i, n, w);
       const y = yPx(v, minV, maxV, CANVAS_H);
-      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
     }
   }
 
@@ -744,7 +781,7 @@ function drawMiniCanvas(canvasEl, draws, visibleSets, scale, blackFrom, blackTo)
       const x2 = xPx(blackTo,   n, w);
       const y2 = yPx(vB, minV, maxV, CANVAS_H);
       ctx.strokeStyle = "#000000";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 4.5;
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     }
   }

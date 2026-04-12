@@ -59,6 +59,7 @@ INDEX_SETS = [
 
 MAX_MATCHES   = 3
 POSITIONS     = (1, 2, 3, 4, 5)
+JUMP_POSITIONS = (1, 2, 3, 4)
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +91,39 @@ def matching_positions(gap_a: tuple, gap_b: tuple) -> list[int]:
 def matched_index_sets(pos_set: set) -> list[tuple]:
     """Return which INDEX_SETS are fully covered by the matching positions."""
     return [s for s in INDEX_SETS if all(p in pos_set for p in s)]
+
+
+def compute_jumps(draw: dict) -> tuple:
+    """
+    Return the spacing between neighboring main-number positions:
+    J1 = Nbr2-Nbr1, J2 = Nbr3-Nbr2, J3 = Nbr4-Nbr3, J4 = Nbr5-Nbr4.
+    """
+    return tuple(
+        draw[f"Nbr{p + 1}"] - draw[f"Nbr{p}"]
+        for p in JUMP_POSITIONS
+    )
+
+
+def matching_jumps(jumps_a: tuple, jumps_b: tuple) -> list[int]:
+    """Return 1-based jump positions where the exact jump value matches."""
+    return [p for p in JUMP_POSITIONS if jumps_a[p - 1] == jumps_b[p - 1]]
+
+
+def _draw_payload(draw: dict) -> dict:
+    return {
+        f"Nbr{p}": draw[f"Nbr{p}"]
+        for p in range(1, 7)
+        if f"Nbr{p}" in draw
+    }
+
+
+def _context_payload(draws: list[dict], start: int, stop: int) -> list[dict]:
+    context = []
+    for j in range(start, stop):
+        row = _draw_payload(draws[j])
+        row.update({"DrawDate": draws[j]["DrawDate"], "DrawIndex": draws[j]["DrawIndex"]})
+        context.append(row)
+    return context
 
 
 # ---------------------------------------------------------------------------
@@ -169,10 +203,8 @@ def find_matches(
             "match_strength":     strength,
             "matched_positions":  m_pos,
             "matched_sets":       [list(s) for s in m_sets],
-            "anchor_draw":        {f"Nbr{p}": hist_draw[f"Nbr{p}"] for p in range(1, 7)
-                                   if f"Nbr{p}" in hist_draw},
-            "next_draw":          {f"Nbr{p}": next_draw[f"Nbr{p}"] for p in range(1, 7)
-                                   if f"Nbr{p}" in next_draw},
+            "anchor_draw":        _draw_payload(hist_draw),
+            "next_draw":          _draw_payload(next_draw),
             "gap_vector":         list(hist_gap),
             "current_gap":        list(curr_gap),
             # Movement from anchor to next (for overlay projection)
@@ -181,12 +213,7 @@ def find_matches(
                 for p in range(1, 6)
             },
             # 5 draws before anchor + anchor + next (for mini-chart)
-            "hist_context": [
-                {f"Nbr{p}": draws[j][f"Nbr{p}"] for p in range(1, 7)
-                 if f"Nbr{p}" in draws[j]}
-                | {"DrawDate": draws[j]["DrawDate"], "DrawIndex": draws[j]["DrawIndex"]}
-                for j in range(max(0, i - 5), i + 2)  # 5 before anchor, anchor, next
-            ],
+            "hist_context": _context_payload(draws, max(0, i - 5), i + 2),
         }
 
         if strength >= 4:
@@ -203,12 +230,84 @@ def find_matches(
         result = three_gap_matches[:MAX_MATCHES]
 
     # Attach current context (same for all matches)
-    curr_context = [
-        {f"Nbr{p}": draws[j][f"Nbr{p}"] for p in range(1, 7)
-         if f"Nbr{p}" in draws[j]}
-        | {"DrawDate": draws[j]["DrawDate"], "DrawIndex": draws[j]["DrawIndex"]}
-        for j in range(max(0, curr_pos - 5), curr_pos + 1)
-    ]
+    curr_context = _context_payload(draws, max(0, curr_pos - 5), curr_pos + 1)
+    for r in result:
+        r["curr_context"] = curr_context
+
+    return result
+
+
+def find_jump_matches(
+    draws: list[dict],
+    current_index: Optional[int] = None,
+) -> list[dict]:
+    """
+    Find historical matches based on exact same-draw jumps between neighboring
+    main-number positions. A match needs at least 3 of the 4 jumps to match.
+    """
+    if len(draws) < 2:
+        return []
+
+    idx_map = {d["DrawIndex"]: i for i, d in enumerate(draws)}
+    if current_index is None:
+        curr_pos = len(draws) - 1
+    else:
+        curr_pos = idx_map.get(current_index, len(draws) - 1)
+
+    if curr_pos < 0:
+        return []
+
+    current_draw = draws[curr_pos]
+    current_jumps = compute_jumps(current_draw)
+    four_jump_matches = []
+    three_jump_matches = []
+
+    for i in range(0, curr_pos):
+        hist_draw = draws[i]
+        hist_jumps = compute_jumps(hist_draw)
+        m_pos = matching_jumps(current_jumps, hist_jumps)
+        strength = len(m_pos)
+        if strength < 3:
+            continue
+
+        next_pos = i + 1
+        if next_pos >= len(draws):
+            continue
+        next_draw = draws[next_pos]
+
+        record = {
+            "match_mode":         "jumps",
+            "anchor_index":       hist_draw["DrawIndex"],
+            "anchor_date":        hist_draw["DrawDate"],
+            "next_index":         next_draw["DrawIndex"],
+            "next_date":          next_draw["DrawDate"],
+            "match_strength":     strength,
+            "matched_positions":  m_pos,
+            "matched_sets":       [],
+            "anchor_draw":        _draw_payload(hist_draw),
+            "next_draw":          _draw_payload(next_draw),
+            "gap_vector":         list(hist_jumps),
+            "current_gap":        list(current_jumps),
+            "next_delta":         {
+                f"Nbr{p}": next_draw[f"Nbr{p}"] - hist_draw[f"Nbr{p}"]
+                for p in range(1, 6)
+            },
+            "hist_context": _context_payload(draws, max(0, i - 5), i + 2),
+        }
+
+        if strength >= 4:
+            four_jump_matches.append(record)
+        else:
+            three_jump_matches.append(record)
+
+    if four_jump_matches:
+        four_jump_matches.sort(key=lambda x: -x["anchor_index"])
+        result = [four_jump_matches[0]]
+    else:
+        three_jump_matches.sort(key=lambda x: -x["anchor_index"])
+        result = three_jump_matches[:MAX_MATCHES]
+
+    curr_context = _context_payload(draws, max(0, curr_pos - 5), curr_pos + 1)
     for r in result:
         r["curr_context"] = curr_context
 

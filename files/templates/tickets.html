@@ -656,13 +656,14 @@ function getBucketValues(setIndex) {
   return Array.from(list.options).map(option => Number(option.value));
 }
 
-function addBucketValue(setIndex) {
+function addBucketValueFromInput(setIndex, focusAfterAdd = true) {
   const error = document.getElementById("perm-error");
   error.classList.add("hidden");
   const lotto = currentLotto();
   const rules = GAME_RULES[lotto];
   const input = document.getElementById(`p${setIndex}-input`);
   const list = document.getElementById(`p${setIndex}`);
+  if (!input.value.trim()) return true;
   const value = Number(input.value);
   const max = (lotto === "FL" || setIndex <= 5) ? rules.main_max : rules.bonus_max;
   if (!Number.isInteger(value) || value < 1 || value > max) {
@@ -670,12 +671,12 @@ function addBucketValue(setIndex) {
       ? `Set ${setIndex} numbers must be between 1 and ${rules.main_max}.`
       : `Set ${setIndex} numbers must be between 1 and ${rules.bonus_max}.`;
     error.classList.remove("hidden");
-    return;
+    return false;
   }
   if (Array.from(list.options).some(option => Number(option.value) === value)) {
     error.textContent = `Set ${setIndex} already includes ${value}.`;
     error.classList.remove("hidden");
-    return;
+    return false;
   }
   const option = document.createElement("option");
   option.value = String(value);
@@ -685,7 +686,19 @@ function addBucketValue(setIndex) {
     .sort((a, b) => Number(a.value) - Number(b.value))
     .forEach(option => list.appendChild(option));
   input.value = "";
-  input.focus();
+  if (focusAfterAdd) input.focus();
+  return true;
+}
+
+function addBucketValue(setIndex) {
+  addBucketValueFromInput(setIndex);
+}
+
+function addPendingBucketInputs() {
+  for (const setIndex of [1,2,3,4,5,6]) {
+    if (!addBucketValueFromInput(setIndex, false)) return false;
+  }
+  return true;
 }
 
 function removeSelectedBucketValue(setIndex) {
@@ -849,6 +862,7 @@ async function savePermutations() {
   const error = document.getElementById("perm-error");
   error.classList.add("hidden");
   const lotto = currentLotto();
+  if (!addPendingBucketInputs()) return;
   const buckets = [1,2,3,4,5,6].map(i => getBucketValues(i));
   if (buckets.some(b => !b.length || b.some(n => !Number.isFinite(n)))) {
     error.textContent = "Each set needs at least one number in its list.";

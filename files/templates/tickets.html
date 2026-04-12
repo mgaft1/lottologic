@@ -743,6 +743,7 @@ function validateClientNumbers(lotto, numbers) {
 
 async function loadTickets() {
   const r = await fetch(`/api/tickets?lotto=${currentLotto()}&draw_date=${currentDate()}`);
+  if (!r.ok) throw new Error(`Could not load saved tickets (${r.status}).`);
   const data = await r.json();
   renderTickets(data);
 }
@@ -860,6 +861,7 @@ function renderTickets(data) {
 }
 
 async function savePermutations() {
+  const generateBtn = document.getElementById("btn-generate");
   const error = document.getElementById("perm-error");
   error.classList.add("hidden");
   const lotto = currentLotto();
@@ -881,21 +883,34 @@ async function savePermutations() {
       return;
     }
   }
-  const r = await fetch("/api/tickets/permutations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      lotto,
-      draw_date: currentDate(),
-      buckets,
-      price: Number(document.getElementById("perm-price").value || 0),
-      purchased: currentStatus("perm-status") === "purchased",
-    })
-  });
-  const data = await r.json();
-  if (!r.ok) {
-    error.textContent = data.error || "Could not generate tickets.";
+  generateBtn.disabled = true;
+  generateBtn.textContent = "Saving...";
+  let data;
+  try {
+    const r = await fetch("/api/tickets/permutations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lotto,
+        draw_date: currentDate(),
+        buckets,
+        price: Number(document.getElementById("perm-price").value || 0),
+        purchased: currentStatus("perm-status") === "purchased",
+      })
+    });
+    data = await r.json();
+    if (!r.ok) {
+      error.textContent = data.error || `Could not generate tickets (${r.status}).`;
+      error.classList.remove("hidden");
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Generate + Save";
+      return;
+    }
+  } catch (err) {
+    error.textContent = `Could not generate tickets: ${err.message || err}`;
     error.classList.remove("hidden");
+    generateBtn.disabled = false;
+    generateBtn.textContent = "Generate + Save";
     return;
   }
   const notes = [];
@@ -903,7 +918,14 @@ async function savePermutations() {
   if (data.duplicates) notes.push(`skipped ${data.duplicates} duplicate ticket(s)`);
   error.textContent = `Saved ${data.saved} tickets${notes.length ? `, ${notes.join(", ")}` : ""}.`;
   error.classList.remove("hidden");
-  await loadTickets();
+  try {
+    await loadTickets();
+    document.getElementById("tickets-body").closest(".panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    error.textContent = `Tickets were saved, but the list could not refresh: ${err.message || err}`;
+  }
+  generateBtn.disabled = false;
+  generateBtn.textContent = "Generate + Save";
 }
 
 async function saveActualDraw() {

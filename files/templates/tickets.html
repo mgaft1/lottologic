@@ -144,9 +144,10 @@ input::placeholder {
 }
 .perm-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(86px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(6, 92px) minmax(330px, auto);
+  gap: 12px;
   align-items: start;
+  justify-content: start;
 }
 .bucket-field {
   display: flex;
@@ -191,12 +192,29 @@ input::placeholder {
   padding: 5px 6px;
   font-size: 0.9rem;
 }
+.price-input {
+  width: 112px;
+  max-width: 112px;
+}
 .perm-actions {
   display: flex;
-  gap: 18px;
+  gap: 12px;
   align-items: end;
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: 0;
+}
+@media (max-width: 1120px) {
+  .perm-grid {
+    grid-template-columns: repeat(3, 92px) minmax(330px, auto);
+  }
+}
+@media (max-width: 760px) {
+  .perm-grid {
+    grid-template-columns: repeat(2, 92px);
+  }
+  .perm-actions {
+    grid-column: 1 / -1;
+  }
 }
 .helper {
   color: #000000;
@@ -431,17 +449,17 @@ td {
         <button type="button" class="btn btn-secondary bucket-remove" data-remove-bucket="{{ i }}">Remove</button>
       </div>
       {% endfor %}
-    </div>
-    <div class="perm-actions">
-      <div class="field">
-        <label>Status</label>
-        <div class="status-group">
-          <label class="status-choice"><input type="radio" name="perm-status" value="purchased">Purchased</label>
-          <label class="status-choice"><input type="radio" name="perm-status" value="optional" checked>Optional</label>
+      <div class="perm-actions">
+        <div class="field">
+          <label>Status</label>
+          <div class="status-group">
+            <label class="status-choice"><input type="radio" name="perm-status" value="purchased">Purchased</label>
+            <label class="status-choice"><input type="radio" name="perm-status" value="optional" checked>Optional</label>
+          </div>
         </div>
+        <div class="field"><label>Price</label><input class="price-input" type="number" id="perm-price" min="0" step="0.01"></div>
+        <button class="btn" id="btn-generate">Generate + Save</button>
       </div>
-      <div class="field"><label>Price</label><input type="number" id="perm-price" min="0" step="0.01"></div>
-      <button class="btn" id="btn-generate">Generate + Save</button>
     </div>
     <div class="helper" style="margin-top:10px;">Enter a number for a set, click +, and repeat as needed. Every valid permutation is saved as its own ticket.</div>
     <div class="error hidden" id="perm-error"></div>

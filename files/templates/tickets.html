@@ -898,7 +898,13 @@ async function savePermutations() {
         purchased: currentStatus("perm-status") === "purchased",
       })
     });
-    data = await r.json();
+    const responseText = await r.text();
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      const plainText = responseText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      throw new Error(`Server returned ${r.status}: ${plainText.slice(0, 180) || "non-JSON response"}`);
+    }
     if (!r.ok) {
       error.textContent = data.error || `Could not generate tickets (${r.status}).`;
       error.classList.remove("hidden");

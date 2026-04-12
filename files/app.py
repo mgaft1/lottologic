@@ -56,6 +56,8 @@ def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("logged_in"):
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Session expired. Please sign in again, then retry."}), 401
             return redirect(url_for("login", next=request.path))
         return f(*args, **kwargs)
     return decorated
@@ -575,53 +577,57 @@ def api_tickets_add():
 @app.route("/api/tickets/permutations", methods=["POST"])
 @login_required
 def api_tickets_permutations():
-    trigger_ticket_cleanup_async()
-    data = request.get_json(silent=True) or {}
-    lotto_type = (data.get("lotto") or "MM").strip()
-    draw_date = (data.get("draw_date") or "").strip()
-    buckets = data.get("buckets") or []
-    price = float(data.get("price") or 0)
-    purchased = _parse_purchased_flag(data.get("purchased", True))
-
-    if lotto_type not in LOTTO_LABELS:
-        return jsonify({"error": "Invalid lotto type"}), 400
-    if not draw_date:
-        return jsonify({"error": "draw_date required"}), 400
-    if len(buckets) != 6:
-        return jsonify({"error": "Six position buckets are required"}), 400
-
-    parsed_buckets = []
     try:
-        for bucket in buckets:
-            values = [int(v) for v in bucket]
-            if not values:
-                return jsonify({"error": "Each position needs at least one number"}), 400
-            parsed_buckets.append(values)
-    except (TypeError, ValueError):
-        return jsonify({"error": "Permutation values must be integers"}), 400
+        trigger_ticket_cleanup_async()
+        data = request.get_json(silent=True) or {}
+        lotto_type = (data.get("lotto") or "MM").strip()
+        draw_date = (data.get("draw_date") or "").strip()
+        buckets = data.get("buckets") or []
+        price = float(data.get("price") or 0)
+        purchased = _parse_purchased_flag(data.get("purchased", True))
 
-    saved = 0
-    invalid = 0
-    duplicates = 0
-    seen_batch = set()
-    for combo in product(*parsed_buckets):
-        ticket = normalize_ticket_numbers(lotto_type, list(combo))
-        ok, _ = validate_ticket_numbers(lotto_type, ticket)
-        if not ok:
-            invalid += 1
-            continue
-        key = tuple(ticket)
-        if key in seen_batch:
-            duplicates += 1
-            continue
-        seen_batch.add(key)
-        ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, ticket, purchased=purchased)
-        if ticket_id is None:
-            duplicates += 1
-            continue
-        saved += 1
+        if lotto_type not in LOTTO_LABELS:
+            return jsonify({"error": "Invalid lotto type"}), 400
+        if not draw_date:
+            return jsonify({"error": "draw_date required"}), 400
+        if len(buckets) != 6:
+            return jsonify({"error": "Six position buckets are required"}), 400
 
-    return jsonify({"saved": saved, "invalid": invalid, "duplicates": duplicates}), 201
+        parsed_buckets = []
+        try:
+            for bucket in buckets:
+                values = [int(v) for v in bucket]
+                if not values:
+                    return jsonify({"error": "Each position needs at least one number"}), 400
+                parsed_buckets.append(values)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Permutation values must be integers"}), 400
+
+        saved = 0
+        invalid = 0
+        duplicates = 0
+        seen_batch = set()
+        for combo in product(*parsed_buckets):
+            ticket = normalize_ticket_numbers(lotto_type, list(combo))
+            ok, _ = validate_ticket_numbers(lotto_type, ticket)
+            if not ok:
+                invalid += 1
+                continue
+            key = tuple(ticket)
+            if key in seen_batch:
+                duplicates += 1
+                continue
+            seen_batch.add(key)
+            ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, ticket, purchased=purchased)
+            if ticket_id is None:
+                duplicates += 1
+                continue
+            saved += 1
+
+        return jsonify({"saved": saved, "invalid": invalid, "duplicates": duplicates}), 201
+    except Exception as exc:
+        logger.exception("Could not generate ticket permutations")
+        return jsonify({"error": f"Could not generate tickets on the server: {exc}"}), 500
 
 
 @app.route("/api/manual_draw", methods=["POST"])

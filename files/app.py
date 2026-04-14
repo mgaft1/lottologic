@@ -375,6 +375,44 @@ def validate_ticket_numbers(lotto_type: str, numbers: list[int]) -> tuple[bool, 
     return True, ""
 
 
+def _project_future_draw(lotto_type: str, match: dict, current_draw: dict) -> dict:
+    rules = TICKET_GAME_RULES[lotto_type]
+    projected = []
+    for set_num in range(1, 7):
+        anchor = match["anchor_draw"].get(f"Nbr{set_num}")
+        next_value = match["next_draw"].get(f"Nbr{set_num}")
+        current = current_draw.get(f"Nbr{set_num}")
+        if anchor is None or next_value is None or current is None:
+            projected.append(None)
+            continue
+        max_value = rules["main_max"] if lotto_type == "FL" or set_num <= 5 else rules["bonus_max"]
+        value = int(current) + (int(next_value) - int(anchor))
+        projected.append(max(1, min(int(max_value), value)))
+
+    if lotto_type != "FL":
+        main = sorted(v for v in projected[:5] if v is not None)
+        projected = main + [projected[5]]
+    else:
+        projected = sorted(v for v in projected if v is not None)
+
+    return {f"set{idx + 1}": value for idx, value in enumerate(projected)}
+
+
+def _first_projected_match(lotto_type: str, mode: str, draws: list[dict]) -> dict | None:
+    if not draws:
+        return None
+    matches = gap_engine.find_jump_matches(draws) if mode == "jumps" else gap_engine.find_matches(draws)
+    if not matches:
+        return None
+    match = matches[0]
+    return {
+        "match_count": len(matches),
+        "anchor_index": match["anchor_index"],
+        "anchor_date": match["anchor_date"],
+        "numbers": _project_future_draw(lotto_type, match, draws[-1]),
+    }
+
+
 def compare_ticket_to_draw(lotto_type: str, ticket: dict, draw: dict | None) -> dict:
     numbers = _ticket_numbers_from_row(ticket)
     if not draw:
@@ -501,6 +539,40 @@ def tickets_page():
 @app.route("/api/build")
 def api_build():
     return jsonify({"build": APP_BUILD})
+
+
+@app.route("/api/ticket_expectations")
+@login_required
+def api_ticket_expectations():
+    lotto_type = request.args.get("lotto", "MM")
+    draw_date = request.args.get("draw_date")
+    if lotto_type not in LOTTO_LABELS:
+        return jsonify({"error": "Invalid lotto type"}), 400
+
+    _, latest_str = db.get_date_bounds(lotto_type)
+    draws = db.get_all_draws(lotto_type)
+    if not latest_str or not draws:
+        return jsonify({"error": "No draw history available"}), 404
+
+    rows = db_forecast.get_forecast_bands(lotto_type, latest_str, latest_str, FORECAST_MODEL)
+    corridors = []
+    for row in rows:
+        corridors.append({
+            "set": int(row["SetNumber"]),
+            "safe_low": row["SafeLow"],
+            "safe_high": row["SafeHigh"],
+            "hot_low": row["HotLow"],
+            "hot_high": row["HotHigh"],
+        })
+
+    return jsonify({
+        "lotto": lotto_type,
+        "last_draw_date": latest_str,
+        "draw_date": draw_date or latest_str,
+        "directions": _first_projected_match(lotto_type, "directions", draws),
+        "jumps": _first_projected_match(lotto_type, "jumps", draws),
+        "corridors": corridors,
+    })
 
 
 @app.route("/api/tickets")

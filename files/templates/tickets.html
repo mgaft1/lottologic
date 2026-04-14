@@ -109,22 +109,27 @@ input::placeholder {
 }
 .btn-secondary:hover { background: #e2e7ec; }
 .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-  gap: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .summary-card {
   background: #ffffff;
   border: 1px solid #d9dde3;
   border-radius: 8px;
-  padding: 14px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 .summary-card .label {
   color: #000000;
   font-size: 1rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: 6px;
+  margin-bottom: 0;
   font-weight: 700;
 }
 .summary-card .value {
@@ -139,9 +144,17 @@ input::placeholder {
 }
 .draw-entry-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
-  gap: 8px;
+  grid-template-columns: repeat(6, 72px) auto;
+  gap: 10px;
   align-items: end;
+  justify-content: start;
+}
+.draw-entry-grid input[type=number] {
+  width: 72px;
+  min-width: 72px;
+  text-align: center;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 .perm-grid {
   display: grid;
@@ -176,7 +189,8 @@ input::placeholder {
 }
 .bucket-list {
   width: 72px;
-  min-height: 132px;
+  height: 96px;
+  min-height: 96px;
   background: #ffffff;
   color: #000000;
   border: 1px solid #9da5ad;
@@ -204,6 +218,22 @@ input::placeholder {
   flex-wrap: wrap;
   margin-top: 0;
 }
+.perm-action-panel {
+  align-self: start;
+  display: grid;
+  grid-template-columns: max-content 112px auto;
+  column-gap: 12px;
+  row-gap: 10px;
+  align-items: end;
+  max-width: 620px;
+}
+.perm-action-message {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+.perm-action-panel .field {
+  min-width: 0;
+}
 @media (max-width: 1120px) {
   .perm-grid {
     grid-template-columns: repeat(3, 92px) minmax(330px, auto);
@@ -215,6 +245,9 @@ input::placeholder {
   }
   .perm-actions {
     grid-column: 1 / -1;
+  }
+  .perm-action-panel {
+    max-width: none;
   }
 }
 .helper {
@@ -349,6 +382,90 @@ td {
   font-size: 1rem;
   font-weight: 700;
 }
+.expectations-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.expectations-head {
+  display: flex;
+  justify-content: flex-start;
+  gap: 22px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.expectations-title-wrap {
+  min-width: 520px;
+}
+.expectation-block {
+  background: #ffffff;
+  border: 1px solid #d9dde3;
+  border-radius: 8px;
+  padding: 12px;
+}
+.expectation-heading {
+  color: #000000;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.projection-row {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.projection-label {
+  color: #000000;
+  font-size: 1rem;
+  font-weight: 800;
+}
+.projection-balls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.expect-chip {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #eef1f4;
+  color: #000000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+.corridor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1rem;
+}
+.corridor-table th,
+.corridor-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #d7dce3;
+  color: #000000;
+  font-weight: 800;
+}
+.corridor-table th {
+  font-size: 0.95rem;
+}
+.corridor-set {
+  width: 70px;
+}
+.corridor-safe {
+  background: #ffffff;
+}
+.corridor-hot {
+  background: #ffffff;
+}
 .error {
   color: #bf4d5d;
   font-size: 1.28rem;
@@ -362,6 +479,8 @@ td {
 @media (max-width: 760px) {
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .draw-entry-grid, .entry-grid, .perm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .expectations-head { flex-direction: column; }
+  .expectations-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -415,22 +534,56 @@ td {
     <div class="error hidden" id="draw-entry-error"></div>
   </div>
 
-  <div class="summary-grid">
-    <div class="summary-card">
-      <div class="label">Tickets</div>
-      <div class="value" id="sum-count">0</div>
+  <div class="panel" id="expectations-panel">
+    <div class="expectations-head">
+      <div class="expectations-title-wrap">
+        <div class="section-title">Future Expectations</div>
+        <div class="helper" id="expectations-status">Loading future expectations...</div>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="label">Tickets</div>
+          <div class="value" id="sum-count">0</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Total Spent</div>
+          <div class="value" id="sum-spent">$0.00</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Results</div>
+          <div class="value" id="sum-won">$0.00</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Net</div>
+          <div class="value" id="sum-net">$0.00</div>
+        </div>
+      </div>
     </div>
-    <div class="summary-card">
-      <div class="label">Total Spent</div>
-      <div class="value" id="sum-spent">$0.00</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Results</div>
-      <div class="value" id="sum-won">$0.00</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Net</div>
-      <div class="value" id="sum-net">$0.00</div>
+    <div class="expectations-grid">
+      <div class="expectation-block">
+        <div class="expectation-heading">Projected Future Draws</div>
+        <div class="projection-row">
+          <div class="projection-label">Directions</div>
+          <div class="projection-balls" id="projection-directions"></div>
+        </div>
+        <div class="projection-row">
+          <div class="projection-label">Jumps</div>
+          <div class="projection-balls" id="projection-jumps"></div>
+        </div>
+      </div>
+      <div class="expectation-block">
+        <div class="expectation-heading">Expected Corridors</div>
+        <table class="corridor-table">
+          <thead>
+            <tr>
+              <th class="corridor-set">Set</th>
+              <th>SAFE</th>
+              <th>HOT</th>
+            </tr>
+          </thead>
+          <tbody id="corridors-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -450,7 +603,7 @@ td {
         <button type="button" class="btn btn-secondary bucket-remove" data-remove-bucket="{{ i }}">Remove</button>
       </div>
       {% endfor %}
-      <div class="perm-actions">
+      <div class="perm-actions perm-action-panel">
         <div class="field">
           <label>Status</label>
           <div class="status-group">
@@ -460,10 +613,11 @@ td {
         </div>
         <div class="field"><label>Price</label><input class="price-input" type="number" id="perm-price" min="0" step="0.01"></div>
         <button class="btn" id="btn-generate">Generate + Save</button>
+        <div class="perm-action-message">
+          <div class="error hidden" id="perm-error"></div>
+        </div>
       </div>
     </div>
-    <div class="helper" style="margin-top:10px;">Enter a number for a set, click +, and repeat as needed. Every valid permutation is saved as its own ticket.</div>
-    <div class="error hidden" id="perm-error"></div>
   </div>
 
   <div class="panel">
@@ -605,6 +759,55 @@ function actualBallsHtml(draw) {
   if (!draw) return "";
   const nums = [draw.Nbr1, draw.Nbr2, draw.Nbr3, draw.Nbr4, draw.Nbr5, draw.Nbr6].filter(v => v != null);
   return nums.map((n, i) => `<span class="ball" style="background:${SET_COLORS[Math.min(i, SET_COLORS.length - 1)]};color:#fff;">${n}</span>`).join("");
+}
+
+function expectationBallsHtml(numbers) {
+  if (!numbers) return `<span class="helper">No match found.</span>`;
+  const vals = [1,2,3,4,5,6].map(i => numbers[`set${i}`]).filter(v => v != null);
+  if (!vals.length) return `<span class="helper">No match found.</span>`;
+  return vals.map((n, i) => {
+    const color = SET_COLORS[Math.min(i, SET_COLORS.length - 1)];
+    return `<span class="expect-chip" style="background:${color};color:#fff;">${n}</span>`;
+  }).join("");
+}
+
+function formatRange(low, high) {
+  if (low == null || high == null) return "-";
+  return `${low}-${high}`;
+}
+
+async function loadExpectations() {
+  const status = document.getElementById("expectations-status");
+  const directions = document.getElementById("projection-directions");
+  const jumps = document.getElementById("projection-jumps");
+  const corridorsBody = document.getElementById("corridors-body");
+  status.textContent = "Loading future expectations...";
+  directions.innerHTML = "";
+  jumps.innerHTML = "";
+  corridorsBody.innerHTML = "";
+
+  try {
+    const r = await fetch(`/api/ticket_expectations?lotto=${currentLotto()}&draw_date=${currentDate()}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || `Could not load future expectations (${r.status}).`);
+
+    directions.innerHTML = expectationBallsHtml(data.directions?.numbers);
+    jumps.innerHTML = expectationBallsHtml(data.jumps?.numbers);
+    for (const row of data.corridors || []) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="corridor-set">${row.set}</td>
+        <td class="corridor-safe">${formatRange(row.safe_low, row.safe_high)}</td>
+        <td class="corridor-hot">${formatRange(row.hot_low, row.hot_high)}</td>
+      `;
+      corridorsBody.appendChild(tr);
+    }
+    status.textContent = `Based on latest stored draw ${formatUsDate(data.last_draw_date)}.`;
+  } catch (err) {
+    status.textContent = err.message || "Could not load future expectations.";
+    directions.innerHTML = `<span class="helper">Unavailable.</span>`;
+    jumps.innerHTML = `<span class="helper">Unavailable.</span>`;
+  }
 }
 
 function applyDefaultPrices() {
@@ -1011,6 +1214,7 @@ applyDefaultPrices();
 applyInputRanges();
 setInterval(updateWinningEntryLock, 60000);
 loadTickets();
+loadExpectations();
 </script>
 </body>
 </html>

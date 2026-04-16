@@ -413,6 +413,35 @@ def _first_projected_match(lotto_type: str, mode: str, draws: list[dict]) -> dic
     }
 
 
+def _overdue_numbers(lotto_type: str, draws: list[dict]) -> list[dict]:
+    if not draws:
+        return []
+    rules = TICKET_GAME_RULES[lotto_type]
+    max_number = rules["main_max"]
+    if rules.get("bonus_max"):
+        max_number = max(max_number, rules["bonus_max"])
+
+    rows = []
+    latest_first = list(reversed(draws))
+    for number in range(1, int(max_number) + 1):
+        draws_since = len(draws)
+        last_date = None
+        for offset, draw in enumerate(latest_first):
+            values = [draw.get(f"Nbr{set_num}") for set_num in range(1, 7)]
+            if number in values:
+                draws_since = offset
+                last_date = draw.get("DrawDate")
+                break
+        rows.append({
+            "number": number,
+            "draws_since": draws_since,
+            "last_date": last_date,
+        })
+
+    rows.sort(key=lambda row: (-row["draws_since"], row["number"]))
+    return rows
+
+
 def compare_ticket_to_draw(lotto_type: str, ticket: dict, draw: dict | None) -> dict:
     numbers = _ticket_numbers_from_row(ticket)
     if not draw:
@@ -1087,7 +1116,7 @@ def api_selections():
 def gaps_page():
     lotto_type = request.args.get("lotto", "CA")
     mode = request.args.get("mode", "directions")
-    if mode not in {"directions", "jumps"}:
+    if mode not in {"directions", "jumps", "overdue"}:
         mode = "directions"
     return render_template(
         "gaps.html",
@@ -1113,6 +1142,8 @@ def api_gaps():
     draws = db.get_all_draws(lotto_type)
     if not draws:
         return jsonify([])
+    if mode == "overdue":
+        return jsonify(_overdue_numbers(lotto_type, draws))
     if mode == "jumps":
         matches = gap_engine.find_jump_matches(draws)
     else:

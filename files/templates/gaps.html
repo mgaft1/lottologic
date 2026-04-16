@@ -125,6 +125,28 @@ body {
 .match-row.active td { background: #e3ecff; }
 .match-row.dimmed { opacity: 0.35; cursor: default; }
 .match-row.dimmed:hover td { background: transparent; }
+#overdue-table {
+  width: 520px;
+  max-width: 100%;
+  border-collapse: collapse;
+  font-size: 1.22rem;
+}
+#overdue-table th {
+  background: #f5f6f8;
+  color: #000000;
+  font-weight: 900;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #d9dde3;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+#overdue-table td {
+  color: #000000;
+  font-weight: 800;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e4e8ed;
+}
 
 .strength-badge {
   display: inline-block; padding: 2px 7px; border-radius: 10px;
@@ -245,6 +267,7 @@ canvas.mc-canvas {
   </select>
   <label class="mode-choice"><input type="radio" name="gap-mode" value="directions" {% if gap_mode == "directions" %}checked{% endif %}> Directions</label>
   <label class="mode-choice"><input type="radio" name="gap-mode" value="jumps" {% if gap_mode == "jumps" %}checked{% endif %}> Jumps</label>
+  <label class="mode-choice"><input type="radio" name="gap-mode" value="overdue" {% if gap_mode == "overdue" %}checked{% endif %}> Overdue</label>
   <a href="/logout" class="nav-logout">Sign out</a>
 </div>
 
@@ -283,6 +306,15 @@ canvas.mc-canvas {
         </tr>
       </thead>
       <tbody id="matches-body"></tbody>
+    </table>
+    <table id="overdue-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>Number</th>
+          <th>Draws Since Chosen</th>
+        </tr>
+      </thead>
+      <tbody id="overdue-body"></tbody>
     </table>
   </div>
 
@@ -413,9 +445,11 @@ function renderTable(matches) {
   const loading  = document.getElementById("loading");
   const noMatch  = document.getElementById("no-matches");
   const table    = document.getElementById("matches-table");
+  const overdueTable = document.getElementById("overdue-table");
   const tbody    = document.getElementById("matches-body");
 
   loading.style.display = "none";
+  overdueTable.style.display = "none";
   tbody.innerHTML = "";
   const isJumps = S.mode === "jumps";
   document.getElementById("matches-title").textContent = isJumps
@@ -472,6 +506,34 @@ function renderTable(matches) {
 
 // ── Game limits per lotto type ────────────────────────────────────────────────
 // main = sets 1-5,  bonus = set 6
+function renderOverdue(rows) {
+  const loading = document.getElementById("loading");
+  const noMatch = document.getElementById("no-matches");
+  const matchesTable = document.getElementById("matches-table");
+  const overdueTable = document.getElementById("overdue-table");
+  const tbody = document.getElementById("overdue-body");
+
+  loading.style.display = "none";
+  matchesTable.style.display = "none";
+  document.getElementById("overlay-panel").classList.remove("visible");
+  document.getElementById("minichart-panel").classList.remove("visible");
+  noMatch.style.display = rows.length ? "none" : "block";
+  document.getElementById("matches-title").textContent = "Overdue numbers";
+  noMatch.textContent = "No overdue number data found for this lotto type.";
+  tbody.innerHTML = "";
+
+  rows.forEach(row => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.number}</td>
+      <td>${row.draws_since}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  overdueTable.style.display = rows.length ? "table" : "none";
+}
+
 const GAME_LIMITS = {
   CA: { mainMin:1, mainMax:47, bonusMin:1, bonusMax:27 },
   FL: { mainMin:1, mainMax:53, bonusMin:1, bonusMax:53 },
@@ -624,11 +686,15 @@ function selectMatch(idx) {
 // ── Load data ─────────────────────────────────────────────────────────────────
 
 async function load() {
+  const checkedMode = document.querySelector("input[name='gap-mode']:checked");
+  if (checkedMode) S.mode = checkedMode.value;
   document.getElementById("loading").style.display = "block";
   document.getElementById("matches-table").style.display = "none";
+  document.getElementById("overdue-table").style.display = "none";
   document.getElementById("no-matches").style.display = "none";
   document.getElementById("overlay-panel").classList.remove("visible");
   document.getElementById("minichart-panel").classList.remove("visible");
+  document.getElementById("set-toolbar").style.display = S.mode === "overdue" ? "none" : "flex";
   S.active = null;
 
   // Fetch last few draws for current draw display
@@ -640,8 +706,14 @@ async function load() {
 
   // Fetch gap matches
   const mr = await fetch(`/api/gaps?lotto=${S.lotto}&mode=${S.mode}`);
-  S.matches = await mr.json();
-  renderTable(S.matches);
+  const rows = await mr.json();
+  if (S.mode === "overdue") {
+    S.matches = [];
+    renderOverdue(rows);
+  } else {
+    S.matches = rows;
+    renderTable(S.matches);
+  }
 }
 
 // ── Lotto selector ────────────────────────────────────────────────────────────

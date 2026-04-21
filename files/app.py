@@ -81,6 +81,31 @@ LOTTO_LABELS = {
     "PD": "Powerball Double",
 }
 
+SELECTED_LOTTO_SESSION_KEY = "selected_lotto"
+
+
+def _valid_lotto_or_default(value: str | None, default: str = "CA") -> str:
+    lotto_type = (value or "").strip().upper()
+    if lotto_type in LOTTO_LABELS:
+        return lotto_type
+    return default if default in LOTTO_LABELS else "CA"
+
+
+def _selected_lotto(default: str = "CA") -> str:
+    return _valid_lotto_or_default(session.get(SELECTED_LOTTO_SESSION_KEY), default)
+
+
+def _resolve_lotto_arg(default: str = "CA") -> str:
+    lotto_type = _valid_lotto_or_default(request.args.get("lotto"), _selected_lotto(default))
+    session[SELECTED_LOTTO_SESSION_KEY] = lotto_type
+    return lotto_type
+
+
+def _resolve_lotto_payload(data: dict, default: str = "MM") -> str:
+    lotto_type = _valid_lotto_or_default(data.get("lotto"), _selected_lotto(default))
+    session[SELECTED_LOTTO_SESSION_KEY] = lotto_type
+    return lotto_type
+
 TICKET_GAME_RULES = {
     "CA": {"main_count": 5, "main_max": 47, "bonus_max": 27, "base_price": 1.0},
     "FL": {"main_count": 6, "main_max": 53, "bonus_max": None, "base_price": 2.0},
@@ -542,9 +567,7 @@ def home():
 @login_required
 def tickets_page():
     trigger_ticket_cleanup_async()
-    lotto_type = request.args.get("lotto", "MM")
-    if lotto_type not in LOTTO_LABELS:
-        lotto_type = "MM"
+    lotto_type = _resolve_lotto_arg("MM")
 
     earliest_str, latest_str = db.get_date_bounds(lotto_type)
     latest = date.fromisoformat(latest_str) if latest_str else date.today()
@@ -573,10 +596,8 @@ def api_build():
 @app.route("/api/ticket_expectations")
 @login_required
 def api_ticket_expectations():
-    lotto_type = request.args.get("lotto", "MM")
+    lotto_type = _resolve_lotto_arg("MM")
     draw_date = request.args.get("draw_date")
-    if lotto_type not in LOTTO_LABELS:
-        return jsonify({"error": "Invalid lotto type"}), 400
 
     _, latest_str = db.get_date_bounds(lotto_type)
     draws = db.get_all_draws(lotto_type)
@@ -608,7 +629,7 @@ def api_ticket_expectations():
 @login_required
 def api_tickets_get():
     trigger_ticket_cleanup_async()
-    lotto_type = request.args.get("lotto", "MM")
+    lotto_type = _resolve_lotto_arg("MM")
     draw_date = request.args.get("draw_date")
     if not draw_date:
         return jsonify({"error": "draw_date required"}), 400
@@ -644,7 +665,7 @@ def api_tickets_get():
 def api_tickets_add():
     trigger_ticket_cleanup_async()
     data = request.get_json(silent=True) or {}
-    lotto_type = (data.get("lotto") or "MM").strip()
+    lotto_type = _resolve_lotto_payload(data, "MM")
     draw_date = (data.get("draw_date") or "").strip()
     numbers = data.get("numbers") or []
     price = float(data.get("price") or 0)
@@ -681,7 +702,7 @@ def api_tickets_permutations():
     try:
         trigger_ticket_cleanup_async()
         data = request.get_json(silent=True) or {}
-        lotto_type = (data.get("lotto") or "MM").strip()
+        lotto_type = _resolve_lotto_payload(data, "MM")
         draw_date = (data.get("draw_date") or "").strip()
         buckets = data.get("buckets") or []
         price = float(data.get("price") or 0)
@@ -735,7 +756,7 @@ def api_tickets_permutations():
 @login_required
 def api_manual_draw():
     data = request.get_json(silent=True) or {}
-    lotto_type = (data.get("lotto") or "MM").strip().upper()
+    lotto_type = _resolve_lotto_payload(data, "MM")
     draw_date = (data.get("draw_date") or "").strip()
     numbers = data.get("numbers") or []
     overwrite = _parse_purchased_flag(data.get("overwrite", False))
@@ -832,7 +853,7 @@ def api_tickets_update_status(ticket_id):
 @app.route("/")
 @login_required
 def index():
-    lotto_type  = request.args.get("lotto", "CA")
+    lotto_type  = _resolve_lotto_arg("CA")
     days        = int(request.args.get("days", DEFAULT_DAYS))
     if days not in WINDOW_DAYS:
         days = DEFAULT_DAYS
@@ -888,7 +909,7 @@ def index():
 @app.route("/api/draws")
 @login_required
 def api_draws():
-    lotto_type   = request.args.get("lotto", "CA")
+    lotto_type   = _resolve_lotto_arg("CA")
     cutoff_now   = request.args.get("cutoff_now")
     cutoff_past_ = request.args.get("cutoff_past")
     if not cutoff_now or not cutoff_past_:
@@ -905,7 +926,7 @@ def api_draws():
 @app.route("/api/index_to_date")
 @login_required
 def api_index_to_date():
-    lotto_type = request.args.get("lotto", "CA")
+    lotto_type = _resolve_lotto_arg("CA")
     try:
         draw_index = int(request.args.get("index"))
     except (TypeError, ValueError):
@@ -921,7 +942,7 @@ def api_index_to_date():
 @app.route("/api/draw")
 @login_required
 def api_draw():
-    lotto_type = request.args.get("lotto", "CA")
+    lotto_type = _resolve_lotto_arg("CA")
     try:
         draw_index = int(request.args.get("index"))
     except (TypeError, ValueError):
@@ -949,7 +970,7 @@ def api_nav():
       RIGHT: anchor = old_anchor + eff_days, clamped to latest
       LEFT:  anchor = old_anchor - eff_days  (new end = old start)
     """
-    lotto_type  = request.args.get("lotto", "CA")
+    lotto_type  = _resolve_lotto_arg("CA")
     direction   = request.args.get("dir")          # left|right|start|end
     days        = int(request.args.get("days", DEFAULT_DAYS))
     anchor_str  = request.args.get("anchor", "")
@@ -1007,7 +1028,7 @@ FORECAST_MODEL = "WF_v4_baseline"
 @app.route("/api/forecast")
 @login_required
 def api_forecast():
-    lotto_type   = request.args.get("lotto", "CA")
+    lotto_type   = _resolve_lotto_arg("CA")
     cutoff_now   = request.args.get("cutoff_now")
     cutoff_past_ = request.args.get("cutoff_past")
     if not cutoff_now or not cutoff_past_:
@@ -1038,7 +1059,7 @@ def api_forecast():
 @app.route("/api/forecast_chart")
 @login_required
 def api_forecast_chart():
-    lotto_type   = request.args.get("lotto", "CA")
+    lotto_type   = _resolve_lotto_arg("CA")
     cutoff_now   = request.args.get("cutoff_now")
     cutoff_past_ = request.args.get("cutoff_past")
     if not cutoff_now or not cutoff_past_:
@@ -1096,7 +1117,7 @@ def _backfill_missing() -> None:
 @app.route("/api/selections")
 @login_required
 def api_selections():
-    lotto_type = request.args.get("lotto", "CA")
+    lotto_type = _resolve_lotto_arg("CA")
     draw_date  = request.args.get("draw_date")
     if not draw_date:
         return jsonify({"error": "draw_date required"}), 400
@@ -1114,7 +1135,7 @@ def api_selections():
 @app.route("/gaps")
 @login_required
 def gaps_page():
-    lotto_type = request.args.get("lotto", "CA")
+    lotto_type = _resolve_lotto_arg("CA")
     mode = request.args.get("mode", "directions")
     if mode not in {"directions", "jumps", "overdue"}:
         mode = "directions"
@@ -1137,7 +1158,7 @@ def gaps_page():
 @app.route("/api/gaps")
 @login_required
 def api_gaps():
-    lotto_type = request.args.get("lotto", "CA")
+    lotto_type = _resolve_lotto_arg("CA")
     mode = request.args.get("mode", "directions")
     draws = db.get_all_draws(lotto_type)
     if not draws:

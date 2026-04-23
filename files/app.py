@@ -814,6 +814,7 @@ def api_manual_draw():
     if not saved:
         return jsonify({"error": "Could not save the winning numbers."}), 500
 
+    db.mark_manual_draw(lotto_type, draw_date)
     _refresh_forecasts_for_lotto(lotto_type)
 
     return jsonify({
@@ -833,6 +834,22 @@ def api_tickets_delete(ticket_id):
         # Treat stale rows as effectively deleted so the UI can refresh cleanly.
         return jsonify({"deleted": ticket_id, "missing": True})
     return jsonify({"deleted": ticket_id})
+
+
+@app.route("/api/tickets/optional", methods=["DELETE", "POST"])
+@login_required
+def api_tickets_delete_optional():
+    data = request.get_json(silent=True) or {}
+    lotto_type = _resolve_lotto_payload(data, "MM")
+    draw_date = (data.get("draw_date") or "").strip()
+    if not draw_date:
+        return jsonify({"error": "draw_date required"}), 400
+    try:
+        date.fromisoformat(draw_date)
+    except ValueError:
+        return jsonify({"error": "Invalid draw date"}), 400
+    deleted = db_ticket_sim.delete_optional_tickets(lotto_type, draw_date)
+    return jsonify({"deleted": deleted})
 
 
 @app.route("/api/tickets/<int:ticket_id>/status", methods=["POST"])

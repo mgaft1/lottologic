@@ -531,6 +531,7 @@ td {
     </div>
     <div class="helper" id="draw-entry-mode">If numbers already exist for this lotto type and date, they will load here so you can update them.</div>
     <div class="helper" id="draw-entry-lock-note"></div>
+    <div class="helper">Manually entered winning numbers will be replaced automatically when the official pull later finds that draw.</div>
     <div class="error hidden" id="draw-entry-error"></div>
   </div>
 
@@ -655,6 +656,7 @@ td {
   <div class="panel">
     <div class="section-head">
       <div class="section-title">Saved Tickets</div>
+      <button class="btn btn-secondary hidden" id="btn-delete-optional">Delete All</button>
     </div>
     <table>
       <thead>
@@ -985,6 +987,7 @@ function renderTickets(data) {
 
   const winners = [];
   const purchasedTickets = [];
+  const optionalTickets = [];
   for (const row of data.tickets) {
     const cmp = row.comparison || {};
     const tr = document.createElement("tr");
@@ -1001,8 +1004,10 @@ function renderTickets(data) {
     `;
     body.appendChild(tr);
     if (row.Purchased) purchasedTickets.push(row);
+    else optionalTickets.push(row);
     if (compareMode && cmp.is_winner) winners.push(row);
   }
+  document.getElementById("btn-delete-optional").classList.toggle("hidden", optionalTickets.length === 0);
 
   purchasedPanel.classList.toggle("hidden", purchasedTickets.length === 0);
   for (const row of purchasedTickets) {
@@ -1061,6 +1066,30 @@ function renderTickets(data) {
       await loadTickets();
     });
   });
+}
+
+async function deleteOptionalTickets() {
+  const btn = document.getElementById("btn-delete-optional");
+  if (!confirm("Delete all optional saved tickets for this lotto and draw date? Purchased tickets will remain.")) return;
+  btn.disabled = true;
+  let resp = await fetch("/api/tickets/optional", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lotto: currentLotto(), draw_date: currentDate() }),
+  });
+  if (!resp.ok) {
+    resp = await fetch("/api/tickets/optional", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lotto: currentLotto(), draw_date: currentDate() }),
+    });
+  }
+  btn.disabled = false;
+  if (!resp.ok) {
+    alert("Could not delete optional tickets. Please try again.");
+    return;
+  }
+  await loadTickets();
 }
 
 async function savePermutations() {
@@ -1181,6 +1210,7 @@ async function saveActualDraw() {
 
 document.getElementById("btn-generate").addEventListener("click", savePermutations);
 document.getElementById("btn-save-draw").addEventListener("click", saveActualDraw);
+document.getElementById("btn-delete-optional").addEventListener("click", deleteOptionalTickets);
 document.querySelectorAll("[data-add-bucket]").forEach(btn => {
   btn.addEventListener("click", () => addBucketValue(Number(btn.dataset.addBucket)));
 });

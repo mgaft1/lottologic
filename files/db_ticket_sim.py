@@ -154,6 +154,25 @@ def delete_ticket(ticket_id: int) -> bool:
     return False
 
 
+def delete_optional_tickets(lotto_type: str, draw_date: str) -> int:
+    for attempt in range(3):
+        try:
+            with _conn() as con:
+                cur = con.execute(
+                    """
+                    DELETE FROM TicketSimSelections
+                    WHERE LottoType = ? AND DrawDate = ? AND Purchased = 0
+                    """,
+                    (lotto_type, draw_date),
+                )
+                return int(cur.rowcount or 0)
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower() or attempt == 2:
+                raise
+            time.sleep(0.2 * (attempt + 1))
+    return 0
+
+
 def update_ticket_status(ticket_id: int, purchased: bool) -> bool:
     with _conn() as con:
         cur = con.execute(

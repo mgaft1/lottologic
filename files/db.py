@@ -53,6 +53,16 @@ def init_db():
     schema = next((p for p in candidates if p.exists()), candidates[0])
     with _conn() as con:
         con.executescript(schema.read_text())
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ManualDrawOverrides (
+                LottoType CHAR(2) NOT NULL,
+                DrawDate  DATE    NOT NULL,
+                CreatedAt TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (LottoType, DrawDate)
+            )
+            """
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +107,22 @@ def insert_draw(lotto_type: str, draw_date: str,
             (lotto_type, draw_date)
         ).fetchone()
         if exists:
+            manual = con.execute(
+                "SELECT 1 FROM ManualDrawOverrides WHERE LottoType=? AND DrawDate=?",
+                (lotto_type, draw_date)
+            ).fetchone()
+            if manual:
+                con.execute(
+                    """UPDATE DrawHistory
+                       SET Nbr1=?, Nbr2=?, Nbr3=?, Nbr4=?, Nbr5=?, Nbr6=?
+                       WHERE LottoType=? AND DrawDate=?""",
+                    (n1, n2, n3, n4, n5, n6, lotto_type, draw_date)
+                )
+                con.execute(
+                    "DELETE FROM ManualDrawOverrides WHERE LottoType=? AND DrawDate=?",
+                    (lotto_type, draw_date)
+                )
+                return True
             return False
 
         next_index = (con.execute(
@@ -116,6 +142,17 @@ def insert_draw(lotto_type: str, draw_date: str,
              n1, n2, n3, n4, n5, n6)
         )
         return True
+
+
+def mark_manual_draw(lotto_type: str, draw_date: str) -> None:
+    with _conn() as con:
+        con.execute(
+            """
+            INSERT OR REPLACE INTO ManualDrawOverrides (LottoType, DrawDate)
+            VALUES (?, ?)
+            """,
+            (lotto_type, draw_date)
+        )
 
 
 def update_draw(lotto_type: str, draw_date: str,
@@ -230,7 +267,17 @@ def get_index_for_date(lotto_type: str, target_date: str) -> int:
 def get_existing_dates(lotto_type: str) -> set:
     with _conn() as con:
         rows = con.execute(
-            "SELECT DrawDate FROM DrawHistory WHERE LottoType=?",
+            """
+            SELECT DrawDate
+            FROM DrawHistory
+            WHERE LottoType=?
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM ManualDrawOverrides m
+                  WHERE m.LottoType = DrawHistory.LottoType
+                    AND m.DrawDate = DrawHistory.DrawDate
+              )
+            """,
             (lotto_type,)
         ).fetchall()
     return {r["DrawDate"] for r in rows}

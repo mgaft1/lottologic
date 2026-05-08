@@ -222,6 +222,28 @@ body {
 }
 #set-toolbar label { display:flex; align-items:center; gap:4px; cursor:pointer; }
 #set-toolbar input[type=checkbox] { cursor:pointer; }
+#set-overdue-toolbar {
+  display: none;
+  background: #ffffff; border-bottom: 1px solid #d3d7de;
+  padding: 6px 16px; align-items: center; gap: 8px;
+  font-size: 1.12rem; color: #000000; flex-shrink: 0;
+}
+.set-overdue-btn {
+  border: 1px solid #9da5ad;
+  background: #f5f6f8;
+  color: #000000;
+  border-radius: 4px;
+  padding: 7px 12px;
+  font-size: 1.08rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.set-overdue-btn:hover { background: #eef3fb; }
+.set-overdue-btn.active {
+  background: #4488ff;
+  border-color: #2266dd;
+  color: #ffffff;
+}
 
 /* ── Mini-chart panel ── */
 #minichart-panel {
@@ -268,6 +290,8 @@ canvas.mc-canvas {
   <label class="mode-choice"><input type="radio" name="gap-mode" value="directions" {% if gap_mode == "directions" %}checked{% endif %}> Directions</label>
   <label class="mode-choice"><input type="radio" name="gap-mode" value="jumps" {% if gap_mode == "jumps" %}checked{% endif %}> Jumps</label>
   <label class="mode-choice"><input type="radio" name="gap-mode" value="overdue" {% if gap_mode == "overdue" %}checked{% endif %}> Overdue</label>
+  <label class="mode-choice"><input type="radio" name="gap-mode" value="weighted_overdue" {% if gap_mode == "weighted_overdue" %}checked{% endif %}> Weighted Overdue</label>
+  <label class="mode-choice"><input type="radio" name="gap-mode" value="set_overdue" {% if gap_mode == "set_overdue" %}checked{% endif %}> Set Overdue</label>
   <a href="/logout" class="nav-logout">Sign out</a>
 </div>
 
@@ -280,6 +304,15 @@ canvas.mc-canvas {
   <label><input type="checkbox" class="chk-set" value="4" checked> <span style="color:#f9e2af;">Four</span></label>
   <label><input type="checkbox" class="chk-set" value="5" checked> <span style="color:#cba6f7;">Five</span></label>
   <label><input type="checkbox" class="chk-set" value="6" checked> <span style="color:#f38ba8;">Six</span></label>
+</div>
+<div id="set-overdue-toolbar">
+  <span>Set:</span>
+  <button type="button" class="set-overdue-btn {% if set_overdue_set == 1 %}active{% endif %}" data-set="1">Set 1</button>
+  <button type="button" class="set-overdue-btn {% if set_overdue_set == 2 %}active{% endif %}" data-set="2">Set 2</button>
+  <button type="button" class="set-overdue-btn {% if set_overdue_set == 3 %}active{% endif %}" data-set="3">Set 3</button>
+  <button type="button" class="set-overdue-btn {% if set_overdue_set == 4 %}active{% endif %}" data-set="4">Set 4</button>
+  <button type="button" class="set-overdue-btn {% if set_overdue_set == 5 %}active{% endif %}" data-set="5">Set 5</button>
+  <button type="button" class="set-overdue-btn {% if set_overdue_set == 6 %}active{% endif %}" data-set="6">Set 6</button>
 </div>
 <div id="main">
 
@@ -311,7 +344,13 @@ canvas.mc-canvas {
       <thead>
         <tr>
           <th>Number</th>
-          <th>Draws Since Chosen</th>
+          <th id="overdue-gap-header">Draws Since Chosen</th>
+          <th class="weighted-overdue-col">Weighted Ratio</th>
+          <th class="weighted-overdue-col">Weighted Recent Avg</th>
+          <th class="weighted-overdue-col">Historical Avg</th>
+          <th class="set-overdue-col">Average Gap</th>
+          <th class="set-overdue-col">Last Drawn</th>
+          <th class="set-overdue-col">Hits</th>
         </tr>
       </thead>
       <tbody id="overdue-body"></tbody>
@@ -370,6 +409,7 @@ let S = {
   matches: [],
   draws:   [],   // raw draws from /api/draws (last few)
   active:  null, // currently selected match index
+  setOverdueSet: {{ set_overdue_set }},
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -506,28 +546,72 @@ function renderTable(matches) {
 
 // ── Game limits per lotto type ────────────────────────────────────────────────
 // main = sets 1-5,  bonus = set 6
-function renderOverdue(rows) {
+function renderOverdue(rows, isSetOverdue = false) {
   const loading = document.getElementById("loading");
   const noMatch = document.getElementById("no-matches");
   const matchesTable = document.getElementById("matches-table");
   const overdueTable = document.getElementById("overdue-table");
   const tbody = document.getElementById("overdue-body");
+  const isWeightedOverdue = S.mode === "weighted_overdue";
 
   loading.style.display = "none";
   matchesTable.style.display = "none";
   document.getElementById("overlay-panel").classList.remove("visible");
   document.getElementById("minichart-panel").classList.remove("visible");
   noMatch.style.display = rows.length ? "none" : "block";
-  document.getElementById("matches-title").textContent = "Overdue numbers";
-  noMatch.textContent = "No overdue number data found for this lotto type.";
+  document.getElementById("matches-title").textContent = isSetOverdue
+    ? `Set ${S.setOverdueSet} overdue numbers`
+    : (isWeightedOverdue ? "Weighted overdue pressure" : "Overdue numbers");
+  noMatch.textContent = isSetOverdue
+    ? `No overdue numbers for Set ${S.setOverdueSet}.`
+    : (isWeightedOverdue ? "No weighted overdue data found for this lotto type." : "No overdue number data found for this lotto type.");
+  document.getElementById("overdue-gap-header").textContent = isSetOverdue
+    ? "Current Gap"
+    : (isWeightedOverdue ? "Current Gap" : "Draws Since Chosen");
+  document.querySelectorAll(".weighted-overdue-col").forEach(el => {
+    el.style.display = isWeightedOverdue ? "table-cell" : "none";
+  });
+  document.querySelectorAll(".set-overdue-col").forEach(el => {
+    el.style.display = isSetOverdue ? "table-cell" : "none";
+  });
   tbody.innerHTML = "";
 
   rows.forEach(row => {
     const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${row.number}</td>
-      <td>${row.draws_since}</td>
-    `;
+    if (isSetOverdue) {
+      tr.innerHTML = `
+        <td>${row.number}</td>
+        <td>${row.current_gap}</td>
+        <td class="weighted-overdue-col" style="display:none;"></td>
+        <td class="weighted-overdue-col" style="display:none;"></td>
+        <td class="weighted-overdue-col" style="display:none;"></td>
+        <td>${row.average_gap}</td>
+        <td>${formatDisplayDate(row.last_date)}</td>
+        <td>${row.hit_count}</td>
+      `;
+    } else if (isWeightedOverdue) {
+      tr.innerHTML = `
+        <td>${row.number}</td>
+        <td>${row.current_gap}</td>
+        <td>${Number(row.weighted_ratio).toFixed(4)}</td>
+        <td>${row.weighted_recent_average}</td>
+        <td>${row.historical_average_gap}</td>
+        <td class="set-overdue-col" style="display:none;"></td>
+        <td class="set-overdue-col" style="display:none;"></td>
+        <td class="set-overdue-col" style="display:none;"></td>
+      `;
+    } else {
+      tr.innerHTML = `
+        <td>${row.number}</td>
+        <td>${row.draws_since}</td>
+        <td class="weighted-overdue-col" style="display:none;"></td>
+        <td class="weighted-overdue-col" style="display:none;"></td>
+        <td class="weighted-overdue-col" style="display:none;"></td>
+        <td class="set-overdue-col" style="display:none;"></td>
+        <td class="set-overdue-col" style="display:none;"></td>
+        <td class="set-overdue-col" style="display:none;"></td>
+      `;
+    }
     tbody.appendChild(tr);
   });
 
@@ -694,7 +778,10 @@ async function load() {
   document.getElementById("no-matches").style.display = "none";
   document.getElementById("overlay-panel").classList.remove("visible");
   document.getElementById("minichart-panel").classList.remove("visible");
-  document.getElementById("set-toolbar").style.display = S.mode === "overdue" ? "none" : "flex";
+  document.getElementById("set-toolbar").style.display =
+    (S.mode === "overdue" || S.mode === "weighted_overdue" || S.mode === "set_overdue") ? "none" : "flex";
+  document.getElementById("set-overdue-toolbar").style.display =
+    S.mode === "set_overdue" ? "flex" : "none";
   S.active = null;
 
   // Fetch last few draws for current draw display
@@ -705,11 +792,12 @@ async function load() {
   renderCurrent(S.draws);
 
   // Fetch gap matches
-  const mr = await fetch(`/api/gaps?lotto=${S.lotto}&mode=${S.mode}`);
+  const setArg = S.mode === "set_overdue" ? `&set=${S.setOverdueSet}` : "";
+  const mr = await fetch(`/api/gaps?lotto=${S.lotto}&mode=${S.mode}${setArg}`);
   const rows = await mr.json();
-  if (S.mode === "overdue") {
+  if (S.mode === "overdue" || S.mode === "weighted_overdue" || S.mode === "set_overdue") {
     S.matches = [];
-    renderOverdue(rows);
+    renderOverdue(rows, S.mode === "set_overdue");
   } else {
     S.matches = rows;
     renderTable(S.matches);
@@ -720,14 +808,27 @@ async function load() {
 
 document.getElementById("sel-lotto").addEventListener("change", function() {
   S.lotto = this.value;
-  window.history.replaceState({}, "", `/gaps?lotto=${S.lotto}&mode=${S.mode}`);
+  const setArg = S.mode === "set_overdue" ? `&set=${S.setOverdueSet}` : "";
+  window.history.replaceState({}, "", `/gaps?lotto=${S.lotto}&mode=${S.mode}${setArg}`);
   load();
 });
 
 document.querySelectorAll("input[name='gap-mode']").forEach(radio => {
   radio.addEventListener("change", () => {
     S.mode = document.querySelector("input[name='gap-mode']:checked").value;
-    window.history.replaceState({}, "", `/gaps?lotto=${S.lotto}&mode=${S.mode}`);
+    const setArg = S.mode === "set_overdue" ? `&set=${S.setOverdueSet}` : "";
+    window.history.replaceState({}, "", `/gaps?lotto=${S.lotto}&mode=${S.mode}${setArg}`);
+    load();
+  });
+});
+
+document.querySelectorAll(".set-overdue-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    S.setOverdueSet = parseInt(btn.dataset.set, 10);
+    document.querySelectorAll(".set-overdue-btn").forEach(other => {
+      other.classList.toggle("active", other === btn);
+    });
+    window.history.replaceState({}, "", `/gaps?lotto=${S.lotto}&mode=${S.mode}&set=${S.setOverdueSet}`);
     load();
   });
 });

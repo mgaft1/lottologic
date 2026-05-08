@@ -81,6 +81,14 @@ LOTTO_LABELS = {
     "PD": "Powerball Double",
 }
 
+PROFILE_BOUNDARY_DATES = {
+    "CA": date(2000, 6, 4),
+    "FL": date(2020, 1, 1),
+    "MM": date(2013, 10, 12),
+    "PB": date(2015, 7, 29),
+    "PD": date(2015, 7, 29),
+}
+
 SELECTED_LOTTO_SESSION_KEY = "selected_lotto"
 
 
@@ -464,6 +472,129 @@ def _overdue_numbers(lotto_type: str, draws: list[dict]) -> list[dict]:
         })
 
     rows.sort(key=lambda row: (-row["draws_since"], row["number"]))
+    return rows
+
+
+def _profile_draws(lotto_type: str, draws: list[dict]) -> list[dict]:
+    boundary = PROFILE_BOUNDARY_DATES.get(lotto_type)
+    if not boundary:
+        return draws
+    filtered = []
+    for draw in draws:
+        draw_date = draw.get("DrawDate")
+        if not draw_date:
+            continue
+        try:
+            if date.fromisoformat(draw_date) >= boundary:
+                filtered.append(draw)
+        except ValueError:
+            continue
+    return filtered
+
+
+def _weighted_overdue_numbers(lotto_type: str, draws: list[dict]) -> list[dict]:
+    profile_draws = _profile_draws(lotto_type, draws)
+    if not profile_draws:
+        return []
+
+    rules = TICKET_GAME_RULES[lotto_type]
+    max_number = rules["main_max"]
+    if rules.get("bonus_max"):
+        max_number = max(max_number, rules["bonus_max"])
+
+    weights = [0.91 + (idx * 0.01) for idx in range(10)]
+    latest_draw_index = len(profile_draws) - 1
+    rows = []
+
+    for number in range(1, int(max_number) + 1):
+        hit_indexes = []
+        hit_dates = []
+        for idx, draw in enumerate(profile_draws):
+            values = [draw.get(f"Nbr{set_num}") for set_num in range(1, 7)]
+            if number in values:
+                hit_indexes.append(idx)
+                hit_dates.append(draw.get("DrawDate"))
+
+        if not hit_indexes:
+            continue
+
+        current_gap = latest_draw_index - hit_indexes[-1]
+        completed_gaps = [
+            hit_indexes[idx] - hit_indexes[idx - 1]
+            for idx in range(1, len(hit_indexes))
+        ]
+        if completed_gaps:
+            historical_average_gap = sum(completed_gaps) / len(completed_gaps)
+        else:
+            historical_average_gap = float(max(current_gap, 1))
+
+        recent_gaps = completed_gaps[-9:] + [current_gap]
+        applied_weights = weights[-len(recent_gaps):]
+        weighted_recent_average = sum(
+            gap * weight for gap, weight in zip(recent_gaps, applied_weights)
+        ) / sum(applied_weights)
+        weighted_ratio = weighted_recent_average / historical_average_gap if historical_average_gap else 0.0
+
+        rows.append({
+            "number": number,
+            "weighted_ratio": round(weighted_ratio, 4),
+            "current_gap": current_gap,
+            "historical_average_gap": round(historical_average_gap, 2),
+            "weighted_recent_average": round(weighted_recent_average, 2),
+            "recent_gap_count": len(recent_gaps),
+            "last_date": hit_dates[-1],
+            "hit_count": len(hit_indexes),
+        })
+
+    rows.sort(key=lambda row: (-row["weighted_ratio"], -row["current_gap"], row["number"]))
+    return rows
+
+
+def _set_overdue_numbers(lotto_type: str, draws: list[dict], set_number: int) -> list[dict]:
+    if not draws or set_number < 1 or set_number > 6:
+        return []
+
+    rules = TICKET_GAME_RULES[lotto_type]
+    max_number = rules["main_max"] if lotto_type == "FL" or set_number <= 5 else rules["bonus_max"]
+    if not max_number:
+        return []
+
+    set_key = f"Nbr{set_number}"
+    latest_draw_index = len(draws) - 1
+    rows = []
+
+    for number in range(1, int(max_number) + 1):
+        hit_indexes = [
+            idx for idx, draw in enumerate(draws)
+            if draw.get(set_key) == number
+        ]
+        if not hit_indexes:
+            continue
+
+        last_idx = hit_indexes[-1]
+        current_gap = latest_draw_index - last_idx
+        last_date = draws[last_idx].get("DrawDate")
+
+        if len(hit_indexes) > 1:
+            gaps = [
+                hit_indexes[idx] - hit_indexes[idx - 1]
+                for idx in range(1, len(hit_indexes))
+            ]
+            average_gap = sum(gaps) / len(gaps)
+        else:
+            average_gap = len(draws)
+
+        if current_gap >= average_gap:
+            rows.append({
+                "set_number": set_number,
+                "number": number,
+                "current_gap": current_gap,
+                "average_gap": round(average_gap, 1),
+                "last_date": last_date,
+                "hit_count": len(hit_indexes),
+            })
+
+    rows.sort(key=lambda row: (-row["current_gap"], row["number"]))
     return rows
 
 
@@ -1154,12 +1285,14 @@ def api_selections():
 def gaps_page():
     lotto_type = _resolve_lotto_arg("CA")
     mode = request.args.get("mode", "directions")
-    if mode not in {"directions", "jumps", "overdue"}:
+    set_number = request.args.get("set", "1", type=int)
+    if mode not in {"directions", "jumps", "overdue", "weighted_overdue", "set_overdue"}:
         mode = "directions"
     return render_template(
         "gaps.html",
         lotto_type=lotto_type,
         gap_mode=mode,
+        set_overdue_set=set_number if set_number in {1, 2, 3, 4, 5, 6} else 1,
         lotto_types=list(LOTTO_LABELS.keys()),
         lotto_labels=LOTTO_LABELS,
     )
@@ -1177,9 +1310,14 @@ def gaps_page():
 def api_gaps():
     lotto_type = _resolve_lotto_arg("CA")
     mode = request.args.get("mode", "directions")
+    set_number = request.args.get("set", "1", type=int)
     draws = db.get_all_draws(lotto_type)
     if not draws:
         return jsonify([])
+    if mode == "set_overdue":
+        return jsonify(_set_overdue_numbers(lotto_type, draws, set_number or 1))
+    if mode == "weighted_overdue":
+        return jsonify(_weighted_overdue_numbers(lotto_type, draws))
     if mode == "overdue":
         return jsonify(_overdue_numbers(lotto_type, draws))
     if mode == "jumps":

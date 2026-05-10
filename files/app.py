@@ -121,6 +121,7 @@ TICKET_GAME_RULES = {
     "PB": {"main_count": 5, "main_max": 69, "bonus_max": 26, "base_price": 2.0},
     "PD": {"main_count": 5, "main_max": 69, "bonus_max": 26, "base_price": 1.0},
 }
+MAX_TICKET_PERMUTATIONS = int(os.environ.get("LOTTO_MAX_TICKET_PERMUTATIONS", "5000"))
 
 FIXED_PRIZE_TABLES = {
     "PB": {
@@ -711,6 +712,7 @@ def tickets_page():
         lotto_types=list(LOTTO_LABELS.keys()),
         lotto_labels=LOTTO_LABELS,
         game_rules=TICKET_GAME_RULES,
+        max_ticket_permutations=MAX_TICKET_PERMUTATIONS,
         app_build=APP_BUILD,
     ))
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -855,6 +857,19 @@ def api_tickets_permutations():
                 parsed_buckets.append(values)
         except (TypeError, ValueError):
             return jsonify({"error": "Permutation values must be integers"}), 400
+
+        permutation_count = 1
+        for bucket in parsed_buckets:
+            permutation_count *= len(bucket)
+        if permutation_count > MAX_TICKET_PERMUTATIONS:
+            return jsonify({
+                "error": (
+                    f"That would generate {permutation_count:,} permutations. "
+                    f"Please reduce the lists to {MAX_TICKET_PERMUTATIONS:,} or fewer combinations."
+                ),
+                "permutations": permutation_count,
+                "max_permutations": MAX_TICKET_PERMUTATIONS,
+            }), 400
 
         saved = 0
         invalid = 0

@@ -698,6 +698,7 @@ td {
 <script>
 const LOTTO_LABELS = {{ lotto_labels | tojson }};
 const GAME_RULES = {{ game_rules | tojson }};
+const MAX_TICKET_PERMUTATIONS = {{ max_ticket_permutations | tojson }};
 const SET_COLORS = ["#8a2be2","#ff4500","#000080","#006400","#4b0082","#a52a2a"];
 
 let compareMode = false;
@@ -907,6 +908,10 @@ function addPendingBucketInputs() {
   return true;
 }
 
+function countTicketPermutations(buckets) {
+  return buckets.reduce((total, bucket) => total * bucket.length, 1);
+}
+
 function removeSelectedBucketValue(setIndex) {
   const list = document.getElementById(`p${setIndex}`);
   Array.from(list.selectedOptions).forEach(option => option.remove());
@@ -1101,6 +1106,12 @@ async function savePermutations() {
   const buckets = [1,2,3,4,5,6].map(i => getBucketValues(i));
   if (buckets.some(b => !b.length || b.some(n => !Number.isFinite(n)))) {
     error.textContent = "Each set needs at least one number in its list.";
+    error.classList.remove("hidden");
+    return;
+  }
+  const permutationCount = countTicketPermutations(buckets);
+  if (permutationCount > MAX_TICKET_PERMUTATIONS) {
+    error.textContent = `That would generate ${permutationCount.toLocaleString()} permutations. Reduce the lists to ${MAX_TICKET_PERMUTATIONS.toLocaleString()} or fewer combinations.`;
     error.classList.remove("hidden");
     return;
   }

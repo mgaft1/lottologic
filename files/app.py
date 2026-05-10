@@ -287,6 +287,20 @@ def _refresh_forecasts_for_lotto(lotto_type: str) -> None:
         backfill_predictions(lotto_type, new_dates, FORECAST_MODEL, _dal=db_forecast)
 
 
+def trigger_forecast_refresh_async(lotto_type: str) -> None:
+    def _forecast_job() -> None:
+        try:
+            _refresh_forecasts_for_lotto(lotto_type)
+        except Exception as exc:
+            logger.warning("%s forecast refresh after manual draw failed: %s", lotto_type, exc)
+
+    threading.Thread(
+        target=_forecast_job,
+        name=f"manual-draw-forecast-{lotto_type.lower()}",
+        daemon=True,
+    ).start()
+
+
 def ensure_lotto_draws_current(lotto_type: str) -> None:
     """
     Viewer stale-data guard. If the DB's latest draw date is behind the most
@@ -901,75 +915,79 @@ def api_tickets_permutations():
 @app.route("/api/manual_draw", methods=["POST"])
 @login_required
 def api_manual_draw():
-    data = request.get_json(silent=True) or {}
-    lotto_type = _resolve_lotto_payload(data, "MM")
-    draw_date = (data.get("draw_date") or "").strip()
-    numbers = data.get("numbers") or []
-    overwrite = _parse_purchased_flag(data.get("overwrite", False))
-
-    if lotto_type not in LOTTO_LABELS:
-        return jsonify({"error": "Invalid lotto type"}), 400
-    if not draw_date:
-        return jsonify({"error": "draw_date required"}), 400
     try:
-        date.fromisoformat(draw_date)
-    except ValueError:
-        return jsonify({"error": "Invalid draw date"}), 400
-    if not isinstance(numbers, list) or len(numbers) != 6:
-        return jsonify({"error": "Exactly 6 winning numbers are required"}), 400
+        data = request.get_json(silent=True) or {}
+        lotto_type = _resolve_lotto_payload(data, "MM")
+        draw_date = (data.get("draw_date") or "").strip()
+        numbers = data.get("numbers") or []
+        overwrite = _parse_purchased_flag(data.get("overwrite", False))
 
-    try:
-        parsed = [int(n) for n in numbers]
-    except (TypeError, ValueError):
-        return jsonify({"error": "Numbers must be integers"}), 400
+        if lotto_type not in LOTTO_LABELS:
+            return jsonify({"error": "Invalid lotto type"}), 400
+        if not draw_date:
+            return jsonify({"error": "draw_date required"}), 400
+        try:
+            date.fromisoformat(draw_date)
+        except ValueError:
+            return jsonify({"error": "Invalid draw date"}), 400
+        if not isinstance(numbers, list) or len(numbers) != 6:
+            return jsonify({"error": "Exactly 6 winning numbers are required"}), 400
 
-    parsed = normalize_ticket_numbers(lotto_type, parsed)
-    ok, msg = validate_ticket_numbers(lotto_type, parsed)
-    if not ok:
-        return jsonify({"error": msg}), 400
+        try:
+            parsed = [int(n) for n in numbers]
+        except (TypeError, ValueError):
+            return jsonify({"error": "Numbers must be integers"}), 400
 
-    existing = db.get_draw_by_date(lotto_type, draw_date)
-    if existing and not overwrite:
+        parsed = normalize_ticket_numbers(lotto_type, parsed)
+        ok, msg = validate_ticket_numbers(lotto_type, parsed)
+        if not ok:
+            return jsonify({"error": msg}), 400
+
+        existing = db.get_draw_by_date(lotto_type, draw_date)
+        if existing and not overwrite:
+            return jsonify({
+                "error": "Winning numbers for that lotto type and draw date already exist.",
+                "existing": existing,
+            }), 409
+
+        if existing:
+            saved = db.update_draw(
+                lotto_type,
+                draw_date,
+                parsed[0],
+                parsed[1],
+                parsed[2],
+                parsed[3],
+                parsed[4],
+                parsed[5],
+            )
+        else:
+            saved = db.insert_draw(
+                lotto_type,
+                draw_date,
+                parsed[0],
+                parsed[1],
+                parsed[2],
+                parsed[3],
+                parsed[4],
+                parsed[5],
+            )
+        if not saved:
+            return jsonify({"error": "Could not save the winning numbers."}), 500
+
+        db.mark_manual_draw(lotto_type, draw_date)
+        trigger_forecast_refresh_async(lotto_type)
+
         return jsonify({
-            "error": "Winning numbers for that lotto type and draw date already exist.",
-            "existing": existing,
-        }), 409
-
-    if existing:
-        saved = db.update_draw(
-            lotto_type,
-            draw_date,
-            parsed[0],
-            parsed[1],
-            parsed[2],
-            parsed[3],
-            parsed[4],
-            parsed[5],
-        )
-    else:
-        saved = db.insert_draw(
-            lotto_type,
-            draw_date,
-            parsed[0],
-            parsed[1],
-            parsed[2],
-            parsed[3],
-            parsed[4],
-            parsed[5],
-        )
-    if not saved:
-        return jsonify({"error": "Could not save the winning numbers."}), 500
-
-    db.mark_manual_draw(lotto_type, draw_date)
-    _refresh_forecasts_for_lotto(lotto_type)
-
-    return jsonify({
-        "saved": True,
-        "updated": bool(existing),
-        "lotto": lotto_type,
-        "draw_date": draw_date,
-        "numbers": parsed,
-    }), 201
+            "saved": True,
+            "updated": bool(existing),
+            "lotto": lotto_type,
+            "draw_date": draw_date,
+            "numbers": parsed,
+        }), 201
+    except Exception as exc:
+        logger.exception("Could not save manual draw")
+        return jsonify({"error": f"Could not save the winning numbers on the server: {exc}"}), 500
 
 
 @app.route("/api/tickets/<int:ticket_id>", methods=["DELETE", "POST"])

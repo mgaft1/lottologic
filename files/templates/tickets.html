@@ -1179,6 +1179,8 @@ async function savePermutations() {
 
 async function saveActualDraw() {
   const error = document.getElementById("draw-entry-error");
+  const saveDrawBtn = document.getElementById("btn-save-draw");
+  const originalText = saveDrawBtn.textContent;
   error.classList.add("hidden");
   if (!canEditWinningNumbers()) {
     error.textContent = "Winning-number entry opens at 8:00 PM on the selected draw date.";
@@ -1195,28 +1197,50 @@ async function saveActualDraw() {
   }
 
   const normalized = normalizeNumbersForLotto(lotto, numbers);
-  const overwrite = document.getElementById("btn-save-draw").textContent.includes("Update");
-  const r = await fetch("/api/manual_draw", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      lotto,
-      draw_date: currentDate(),
-      numbers: normalized,
-      overwrite,
-    })
-  });
-  const data = await r.json();
-  if (!r.ok) {
-    error.textContent = data.error || "Could not save the winning numbers.";
+  const overwrite = originalText.includes("Update");
+  saveDrawBtn.disabled = true;
+  saveDrawBtn.textContent = "Saving...";
+  let data = {};
+  try {
+    const r = await fetch("/api/manual_draw", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lotto,
+        draw_date: currentDate(),
+        numbers: normalized,
+        overwrite,
+      })
+    });
+    const responseText = await r.text();
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      const plainText = responseText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      throw new Error(`Server returned ${r.status}: ${plainText.slice(0, 180) || "non-JSON response"}`);
+    }
+    if (!r.ok) {
+      error.textContent = data.error || "Could not save the winning numbers.";
+      error.classList.remove("hidden");
+      return;
+    }
+  } catch (err) {
+    error.textContent = `Could not save the winning numbers: ${err.message || err}`;
     error.classList.remove("hidden");
     return;
+  } finally {
+    saveDrawBtn.disabled = false;
+    saveDrawBtn.textContent = originalText;
   }
 
   error.textContent = `${data.updated ? "Updated" : "Saved"} winning numbers for ${formatUsDate(currentDate())}.`;
   error.classList.remove("hidden");
   compareMode = false;
-  await loadTickets();
+  try {
+    await loadTickets();
+  } catch (err) {
+    error.textContent = `Winning numbers were saved, but the page could not refresh: ${err.message || err}`;
+  }
 }
 
 document.getElementById("btn-generate").addEventListener("click", savePermutations);

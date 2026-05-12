@@ -17,6 +17,7 @@ def _resolve_db_path() -> str:
 
 
 DB_PATH = _resolve_db_path()
+SQLITE_TIMEOUT_SECS = float(os.environ.get("LOTTO_SQLITE_TIMEOUT_SECS", "30"))
 
 def _journal_mode() -> str:
     mode = os.environ.get("LOTTO_SQLITE_JOURNAL_MODE", "DELETE").upper()
@@ -26,10 +27,10 @@ def _journal_mode() -> str:
 @contextmanager
 def _conn():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(DB_PATH, timeout=30)
+    con = sqlite3.connect(DB_PATH, timeout=SQLITE_TIMEOUT_SECS)
     con.row_factory = sqlite3.Row
     con.execute(f"PRAGMA journal_mode={_journal_mode()}")
-    con.execute("PRAGMA busy_timeout=30000")
+    con.execute(f"PRAGMA busy_timeout={int(SQLITE_TIMEOUT_SECS * 1000)}")
     con.execute("PRAGMA foreign_keys=ON")
     try:
         yield con

@@ -30,6 +30,7 @@ All inserts idempotent (INSERT OR IGNORE in db.insert_draw).
 """
 
 import logging
+import os
 import re
 import threading
 import time
@@ -45,7 +46,7 @@ import db
 logger = logging.getLogger(__name__)
 
 # ── Config ──────────────────────────────────────────────
-REQUEST_TIMEOUT  = 20
+REQUEST_TIMEOUT  = int(os.environ.get("LOTTO_REQUEST_TIMEOUT_SECS", "8"))
 THROTTLE_SECS    = 2
 SCRAPE_INTERVAL  = 6 * 3600   # seconds between full history passes
 STAGGER_SECS     = 3           # delay between each lotto type scrape (3 seconds)
@@ -59,6 +60,10 @@ BROWSER_HEADERS = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
 }
+
+
+def _is_render_runtime() -> bool:
+    return bool(os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("RENDER"))
 
 
 # ── HTTP fetch ───────────────────────────────────────────
@@ -591,14 +596,23 @@ def _scrape_year_only(lotto_type: str, base: str, parser, existing: set[str]) ->
 
 
 def _fetch_ca_year_draws(year: int, primary_base: str, fallback_base: str) -> list[dict]:
-    html = _fetch(f'{primary_base}{year}')
-    draws = parse_lottery_net_ca(html) if html else []
-    if draws:
-        return draws
+    sources = [
+        ("primary", f'{primary_base}{year}', parse_lottery_net_ca),
+        ("fallback", f'{fallback_base}{year}', parse_lottonumbers_ca),
+    ]
+    if _is_render_runtime():
+        sources.reverse()
 
-    logger.info("CA primary source returned no draws for %s; trying fallback source", year)
-    fallback_html = _fetch(f'{fallback_base}{year}')
-    return parse_lottonumbers_ca(fallback_html) if fallback_html else []
+    for label, url, parser in sources:
+        html = _fetch(url)
+        draws = parser(html) if html else []
+        if draws:
+            if label == "fallback":
+                logger.info("CA fallback source succeeded for %s", year)
+            return draws
+        logger.info("CA %s source returned no draws for %s", label, year)
+
+    return []
 
 
 # ── Background worker ────────────────────────────────────

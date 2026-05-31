@@ -1545,6 +1545,35 @@ def _populate_selections() -> None:
             logger.warning("%s Stage 3: no combos generated for %s", lt, last_date)
 
 
+def _refresh_after_scrape_pass(summary: dict[str, int]) -> None:
+    """
+    Keep derived data in sync when the background scraper inserts new draws.
+
+    Render relies on a persistent database, so newly scraped draws need
+    forecast and Stage 3 refresh without waiting for a later request to
+    discover the new dates.
+    """
+    if not summary:
+        return
+
+    changed = [lt for lt, count in summary.items() if count]
+    if not changed:
+        return
+
+    logger.info("Background scrape inserted new draws for %s; refreshing derived data", changed)
+
+    for lt in changed:
+        try:
+            _refresh_forecasts_for_lotto(lt)
+        except Exception as exc:
+            logger.warning("%s forecast refresh after scrape pass failed: %s", lt, exc)
+
+    try:
+        _populate_selections()
+    except Exception as exc:
+        logger.warning("Selection refresh after scrape pass failed: %s", exc)
+
+
 def initialize_runtime() -> None:
     global _runtime_initialized
     with _runtime_init_lock:
@@ -1590,7 +1619,7 @@ def initialize_runtime() -> None:
         # Run the scraper on Render too so the persistent database does not
         # get stuck on an old latest draw date.
         if _env_flag("LOTTO_BACKGROUND_SCRAPER", True):
-            scraper.start_background_scraper()
+            scraper.start_background_scraper(on_pass_complete=_refresh_after_scrape_pass)
 
         _runtime_initialized = True
 

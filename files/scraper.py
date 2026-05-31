@@ -551,6 +551,7 @@ def _scrape_year_only(lotto_type: str, base: str, parser, existing: set[str]) ->
 
 _stop_event = threading.Event()
 _scraper_thread = None
+_pass_complete_callback = None
 
 
 def _worker():
@@ -561,6 +562,11 @@ def _worker():
             summary = run_scrape_pass(current_year_only=first)
             logger.info("Scrape pass (%s) complete: %s",
                         "current year" if first else "full history", summary)
+            if _pass_complete_callback is not None:
+                try:
+                    _pass_complete_callback(summary)
+                except Exception as exc:
+                    logger.warning("Scrape pass callback error: %s", exc)
             first = False
         except Exception as exc:
             logger.warning("Scrape pass error: %s", exc)
@@ -615,12 +621,13 @@ def refresh_lotto_type(lotto_type: str) -> dict[str, int]:
     raise ValueError(f"Unsupported lotto type: {lotto_type}")
 
 
-def start_background_scraper():
+def start_background_scraper(on_pass_complete=None):
     """Launch daemon scraper thread. Returns immediately."""
-    global _scraper_thread
+    global _scraper_thread, _pass_complete_callback
     if _scraper_thread and _scraper_thread.is_alive():
         logger.info("Background scraper already running")
         return
+    _pass_complete_callback = on_pass_complete
     _stop_event.clear()
     _scraper_thread = threading.Thread(target=_worker, name='lotto-scraper', daemon=True)
     _scraper_thread.start()

@@ -89,6 +89,52 @@ def parse_lottery_net_ca(html: str) -> list[dict]:
     )
 
 
+def parse_lottonumbers_ca(html: str) -> list[dict]:
+    """
+    california.lottonumbers.com CA SuperLotto Plus year page.
+
+    The page is text-heavy but stable: each draw starts with MM/DD/YYYY
+    followed by six numeric result lines (five main numbers + mega).
+    """
+    soup = BeautifulSoup(html, 'lxml')
+    lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
+    results = []
+    seen_dates = set()
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        if re.fullmatch(r"\d{2}/\d{2}/\d{4}", line):
+            draw_date = datetime.strptime(line, "%m/%d/%Y").strftime("%Y-%m-%d")
+            if draw_date in seen_dates:
+                i += 1
+                continue
+
+            nums = []
+            j = i + 1
+            while j < len(lines) and len(nums) < 6:
+                candidate = lines[j]
+                if re.fullmatch(r"\d{1,2}", candidate):
+                    nums.append(int(candidate))
+                elif re.fullmatch(r"\d{2}/\d{2}/\d{4}", candidate):
+                    break
+                j += 1
+
+            if len(nums) == 6:
+                main = sorted(nums[:5])
+                results.append({
+                    'draw_date': draw_date,
+                    'n1': main[0], 'n2': main[1], 'n3': main[2],
+                    'n4': main[3], 'n5': main[4], 'n6': nums[5],
+                })
+                seen_dates.add(draw_date)
+                i = j
+                continue
+        i += 1
+
+    return results
+
+
 def parse_lottery_net_mm(html: str) -> list[dict]:
     """
     lottery.net Mega Millions year page.
@@ -332,15 +378,12 @@ def get_colorado_month_urls(html: str) -> list[str]:
 # ── Per-type scrapers ────────────────────────────────────
 
 def _scrape_ca(existing: set[str]) -> int:
-    base  = 'https://www.lottery.net/california/superlotto-plus/numbers/'
+    primary_base  = 'https://www.lottery.net/california/superlotto-plus/numbers/'
+    fallback_base = 'https://california.lottonumbers.com/superlotto-plus/past-numbers/'
     start = 2000
     inserted = 0
     for year in range(start, datetime.now().year + 1):
-        html = _fetch(f'{base}{year}')
-        if not html:
-            time.sleep(THROTTLE_SECS)
-            continue
-        draws = parse_lottery_net_ca(html)
+        draws = _fetch_ca_year_draws(year, primary_base, fallback_base)
         for d in draws:
             if d['draw_date'] not in existing:
                 if db.insert_draw('CA', d['draw_date'],
@@ -547,6 +590,17 @@ def _scrape_year_only(lotto_type: str, base: str, parser, existing: set[str]) ->
     return inserted
 
 
+def _fetch_ca_year_draws(year: int, primary_base: str, fallback_base: str) -> list[dict]:
+    html = _fetch(f'{primary_base}{year}')
+    draws = parse_lottery_net_ca(html) if html else []
+    if draws:
+        return draws
+
+    logger.info("CA primary source returned no draws for %s; trying fallback source", year)
+    fallback_html = _fetch(f'{fallback_base}{year}')
+    return parse_lottonumbers_ca(fallback_html) if fallback_html else []
+
+
 # ── Background worker ────────────────────────────────────
 
 _stop_event = threading.Event()
@@ -585,12 +639,19 @@ def refresh_lotto_type(lotto_type: str) -> dict[str, int]:
     lotto_type = lotto_type.upper()
 
     if lotto_type == "CA":
-        inserted = _scrape_year_only(
-            "CA",
+        year = datetime.now().year
+        draws = _fetch_ca_year_draws(
+            year,
             "https://www.lottery.net/california/superlotto-plus/numbers/",
-            parse_lottery_net_ca,
-            db.get_existing_dates("CA"),
+            "https://california.lottonumbers.com/superlotto-plus/past-numbers/",
         )
+        inserted = 0
+        existing = db.get_existing_dates("CA")
+        for d in draws:
+            if d["draw_date"] not in existing:
+                if db.insert_draw("CA", d["draw_date"], d["n1"], d["n2"], d["n3"], d["n4"], d["n5"], d["n6"]):
+                    inserted += 1
+                    existing.add(d["draw_date"])
         return {"CA": inserted}
 
     if lotto_type == "MM":

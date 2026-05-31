@@ -307,6 +307,9 @@ def ensure_lotto_draws_current(lotto_type: str) -> None:
     recent completed scheduled draw for this lotto type, attempt a targeted
     refresh before serving data.
     """
+    if _is_render_runtime() and not _env_flag("LOTTO_RENDER_REQUEST_REFRESH", False):
+        return
+
     now_local = _now_local()
     expected_latest = latest_completed_draw_date(lotto_type, now_local)
     _, latest_str = db.get_date_bounds(lotto_type)
@@ -1618,8 +1621,14 @@ def initialize_runtime() -> None:
 
         # Run the scraper on Render too so the persistent database does not
         # get stuck on an old latest draw date.
-        if _env_flag("LOTTO_BACKGROUND_SCRAPER", True):
+        run_background_scraper = _env_flag(
+            "LOTTO_BACKGROUND_SCRAPER",
+            not is_render_runtime,
+        )
+        if run_background_scraper:
             scraper.start_background_scraper(on_pass_complete=_refresh_after_scrape_pass)
+        elif is_render_runtime:
+            logger.info("Background scraper disabled on Render web runtime.")
 
         _runtime_initialized = True
 

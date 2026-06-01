@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Numerology</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+:root {
+  --bg: #f4f7fc;
+  --ink: #14233d;
+  --muted: #63728a;
+  --line: rgba(20, 35, 61, 0.14);
+  --panel: rgba(255, 255, 255, 0.94);
+  --accent: #2867dc;
+  --accent-2: #1495d2;
+  --shadow: 0 20px 52px rgba(35, 61, 102, 0.14);
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(40, 103, 220, 0.16), transparent 31%),
+    radial-gradient(circle at bottom right, rgba(20, 149, 210, 0.14), transparent 27%),
+    linear-gradient(180deg, #fbfdff 0%, var(--bg) 100%);
+}
+#navbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(14px);
+}
+#navbar a {
+  color: #fff;
+  font-size: 1.08rem;
+  font-weight: 700;
+  padding: 7px 13px;
+  text-decoration: none;
+  background: #4488ff;
+  border: 1px solid #2266dd;
+  border-radius: 4px;
+}
+#navbar a:hover { background: #3d7cf0; }
+#navbar .nav-logout {
+  margin-left: auto;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}
+main { width: min(1180px, calc(100% - 30px)); margin: 28px auto 50px; }
+.intro { margin-bottom: 18px; text-align: center; }
+h1 { margin: 0 0 6px; font-size: clamp(2rem, 4vw, 2.8rem); }
+.intro p, .helper, .note { color: var(--muted); }
+.layout { display: grid; grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.6fr); gap: 18px; align-items: start; }
+.panel {
+  padding: 20px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+h2 { margin: 0 0 14px; font-size: 1.28rem; }
+h3 { margin: 0; font-size: 1.05rem; }
+.field { margin-bottom: 13px; }
+label { display: block; margin-bottom: 5px; font-size: 0.93rem; font-weight: 800; }
+input {
+  width: 100%;
+  padding: 10px 11px;
+  color: var(--ink);
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+}
+input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(40, 103, 220, 0.12); }
+.partner-toggle { display: flex; gap: 8px; align-items: center; margin: 6px 0 14px; font-weight: 700; }
+.partner-toggle input { width: auto; }
+#partner-fields { display: none; }
+button {
+  width: 100%;
+  cursor: pointer;
+  padding: 11px 16px;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+button:hover { filter: brightness(1.06); }
+#error { min-height: 20px; margin: 8px 0 0; color: #b3261e; font-size: 0.92rem; }
+.method { margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--line); }
+.method summary { cursor: pointer; color: var(--accent); font-weight: 800; }
+.method p, .method li { color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+#results { display: none; }
+.person-title { margin-bottom: 13px; }
+.numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.number-card { padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fbfdff; }
+.number-card .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.value { min-width: 37px; padding: 5px 8px; color: #fff; text-align: center; font-weight: 900; border-radius: 18px; background: var(--accent); }
+.meaning { margin: 8px 0 7px; color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
+.steps { margin: 0; color: #40516b; font-family: Consolas, monospace; font-size: 0.82rem; line-height: 1.45; overflow-wrap: anywhere; }
+.secondary { margin-top: 17px; }
+.compatibility { margin-top: 17px; padding: 16px; border: 1px solid rgba(40, 103, 220, 0.22); border-radius: 13px; background: rgba(40, 103, 220, 0.06); }
+.score { color: var(--accent); font-size: 2rem; font-weight: 900; }
+.compatibility p { margin: 7px 0; line-height: 1.45; }
+.compatibility ul { margin: 8px 0 0; padding-left: 20px; color: #40516b; }
+.compatibility li { margin: 4px 0; }
+@media (max-width: 840px) {
+  #navbar { flex-wrap: wrap; padding: 12px; gap: 8px; }
+  #navbar a { font-size: 0.92rem; padding: 6px 9px; }
+  #navbar .nav-logout { margin-left: 0; }
+  .layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) { .numbers { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div id="navbar">
+  <a href="/home">Home</a>
+  <a href="/">Lotto Viewer</a>
+  <a href="/gaps">Time Gaps</a>
+  <a href="/tickets">Predictions</a>
+  <a href="/links">Links</a>
+  <a href="/taro">Taro Cards</a>
+  <a href="/logout" class="nav-logout">Sign out</a>
+</div>
+
+<main>
+  <div class="intro">
+    <h1>Numerology</h1>
+    <p>Local Pythagorean numerology with visible formulas and calculation steps.</p>
+  </div>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>Your details</h2>
+      <div class="field">
+        <label for="name">Full birth name</label>
+        <input id="name" type="text" maxlength="120" placeholder="First middle last">
+      </div>
+      <div class="field">
+        <label for="birth-date">Birth date</label>
+        <input id="birth-date" type="date">
+      </div>
+
+      <label class="partner-toggle">
+        <input id="include-partner" type="checkbox">
+        Include partner compatibility
+      </label>
+
+      <div id="partner-fields">
+        <div class="field">
+          <label for="partner-name">Partner full birth name</label>
+          <input id="partner-name" type="text" maxlength="120" placeholder="First middle last">
+        </div>
+        <div class="field">
+          <label for="partner-birth-date">Partner birth date</label>
+          <input id="partner-birth-date" type="date">
+        </div>
+      </div>
+
+      <button id="calculate" type="button">Calculate Numbers</button>
+      <p id="error"></p>
+
+      <details class="method">
+        <summary>Calculation rules</summary>
+        <p>Letters use the Pythagorean cycle: A=1 through I=9, then J=1 through R=9, and S=1 through Z=8. Spaces and punctuation are ignored.</p>
+        <ul>
+          <li><strong>Life Path:</strong> reduce all birth-date digits.</li>
+          <li><strong>Personal Year:</strong> reduce birth month + birth day + current calendar year.</li>
+          <li><strong>Expression:</strong> reduce all name letters.</li>
+          <li><strong>Soul Urge:</strong> reduce vowels A, E, I, O, U.</li>
+          <li><strong>Personality:</strong> reduce consonants. Y is treated as a consonant.</li>
+          <li><strong>Master numbers:</strong> 11, 22, and 33 are preserved.</li>
+        </ul>
+      </details>
+      <p class="note">Calculated locally in your browser. Numerology is an interpretive practice, not a scientific assessment or prediction.</p>
+    </section>
+
+    <section id="results" class="panel">
+      <div id="primary-result"></div>
+      <div id="partner-result" class="secondary"></div>
+      <div id="compatibility-result"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const LETTER_VALUES = Object.fromEntries("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter, index) => [letter, (index % 9) + 1]));
+const MASTER_NUMBERS = new Set([11, 22, 33]);
+const VOWELS = new Set(["A", "E", "I", "O", "U"]);
+const MEANINGS = {
+  1: "independence, initiative, and leadership", 2: "cooperation, sensitivity, and partnership",
+  3: "expression, creativity, and sociability", 4: "structure, discipline, and steady work",
+  5: "change, freedom, and adaptability", 6: "care, responsibility, and harmony",
+  7: "analysis, introspection, and spiritual inquiry", 8: "ambition, management, and material results",
+  9: "compassion, completion, and broad perspective", 11: "intuition, inspiration, and heightened sensitivity",
+  22: "large-scale building, practical vision, and lasting impact", 33: "service, compassion, and responsibility toward others"
+};
+const HARMONIOUS = new Set(["1-3", "1-5", "2-4", "2-6", "2-8", "3-5", "3-6", "4-8", "6-9", "7-9"]);
+
+function reduceNumber(total) {
+  const chain = [total];
+  while (total > 9 && !MASTER_NUMBERS.has(total)) {
+    total = String(total).split("").reduce((sum, digit) => sum + Number(digit), 0);
+    chain.push(total);
+  }
+  return { value: total, chain };
+}
+
+function letterCalculation(name, filter) {
+  const letters = name.toUpperCase().replace(/[^A-Z]/g, "").split("").filter(filter);
+  const entries = letters.map(letter => `${letter}(${LETTER_VALUES[letter]})`);
+  const total = letters.reduce((sum, letter) => sum + LETTER_VALUES[letter], 0);
+  return { ...reduceNumber(total), details: entries.length ? entries.join(" + ") : "No matching letters" };
+}
+
+function dateDigits(dateText) {
+  return dateText.replace(/-/g, "").split("").map(Number);
+}
+
+function dateCalculation(dateText) {
+  const digits = dateDigits(dateText);
+  return { ...reduceNumber(digits.reduce((sum, digit) => sum + digit, 0)), details: digits.join(" + ") };
+}
+
+function personalYearCalculation(dateText) {
+  const date = new Date(`${dateText}T00:00:00`);
+  const year = new Date().getFullYear();
+  const digits = [...String(date.getMonth() + 1), ...String(date.getDate()), ...String(year)].map(Number);
+  return { ...reduceNumber(digits.reduce((sum, digit) => sum + digit, 0)), details: digits.join(" + "), year };
+}
+
+function chainText(calculation) {
+  return `${calculation.details} = ${calculation.chain.join(" -> ")}`;
+}
+
+function calculatePerson(name, birthDate) {
+  return {
+    name,
+    lifePath: dateCalculation(birthDate),
+    personalYear: personalYearCalculation(birthDate),
+    expression: letterCalculation(name, () => true),
+    soulUrge: letterCalculation(name, letter => VOWELS.has(letter)),
+    personality: letterCalculation(name, letter => !VOWELS.has(letter))
+  };
+}
+
+function numberCard(label, result, meaning, detailLabel = "") {
+  return `<article class="number-card">
+    <div class="top"><h3>${label}</h3><span class="value">${result.value}</span></div>
+    <p class="meaning">${meaning || MEANINGS[result.value] || "a distinctive personal pattern"}</p>
+    <p class="steps">${detailLabel}${chainText(result)}</p>
+  </article>`;
+}
+
+function personHtml(person, heading) {
+  return `<div class="person-title"><h2>${heading}: ${escapeHtml(person.name)}</h2></div>
+    <div class="numbers">
+      ${numberCard("Life Path", person.lifePath, MEANINGS[person.lifePath.value])}
+      ${numberCard(`Personal Year (${person.personalYear.year})`, person.personalYear, MEANINGS[person.personalYear.value])}
+      ${numberCard("Expression", person.expression, MEANINGS[person.expression.value])}
+      ${numberCard("Soul Urge", person.soulUrge, MEANINGS[person.soulUrge.value])}
+      ${numberCard("Personality", person.personality, MEANINGS[person.personality.value])}
+    </div>`;
+}
+
+function pairScore(left, right, weight) {
+  if (left === right) return { points: weight, reason: `${left} and ${right}: same number, strong natural recognition` };
+  const key = [left, right].sort((a, b) => a - b).join("-");
+  if (HARMONIOUS.has(key)) return { points: Math.round(weight * 0.75), reason: `${left} and ${right}: complementary tendencies` };
+  return { points: Math.round(weight * 0.45), reason: `${left} and ${right}: differences that need conscious communication` };
+}
+
+function compatibilityHtml(left, right) {
+  const parts = [
+    ["Life Path", pairScore(left.lifePath.value, right.lifePath.value, 50)],
+    ["Expression", pairScore(left.expression.value, right.expression.value, 25)],
+    ["Soul Urge", pairScore(left.soulUrge.value, right.soulUrge.value, 25)]
+  ];
+  const score = parts.reduce((sum, part) => sum + part[1].points, 0);
+  const summary = score >= 80 ? "Strong natural alignment" : score >= 60 ? "Promising with some adjustment" : "Different styles that require deliberate understanding";
+  return `<section class="compatibility">
+    <h2>Partner compatibility</h2>
+    <div class="score">${score}/100</div>
+    <p><strong>${summary}.</strong> This is a transparent local rubric, not a universal numerology standard or a prediction about a relationship.</p>
+    <ul>
+      ${parts.map(([label, result]) => `<li><strong>${label} (${result.points} points):</strong> ${result.reason}</li>`).join("")}
+    </ul>
+    <p class="helper">Rubric: Life Path contributes 50 points, Expression 25, and Soul Urge 25. Matching numbers receive full points; complementary pairs receive 75%; other pairs receive 45%.</p>
+  </section>`;
+}
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = value;
+  return div.innerHTML;
+}
+
+function calculate() {
+  const error = document.getElementById("error");
+  const name = document.getElementById("name").value.trim();
+  const birthDate = document.getElementById("birth-date").value;
+  const includePartner = document.getElementById("include-partner").checked;
+  const partnerName = document.getElementById("partner-name").value.trim();
+  const partnerBirthDate = document.getElementById("partner-birth-date").value;
+  error.textContent = "";
+  if (!name || !birthDate) {
+    error.textContent = "Enter your full birth name and birth date.";
+    return;
+  }
+  if (includePartner && (!partnerName || !partnerBirthDate)) {
+    error.textContent = "Enter the partner name and birth date, or turn off partner compatibility.";
+    return;
+  }
+  const person = calculatePerson(name, birthDate);
+  document.getElementById("primary-result").innerHTML = personHtml(person, "Your numbers");
+  document.getElementById("partner-result").innerHTML = "";
+  document.getElementById("compatibility-result").innerHTML = "";
+  if (includePartner) {
+    const partner = calculatePerson(partnerName, partnerBirthDate);
+    document.getElementById("partner-result").innerHTML = personHtml(partner, "Partner numbers");
+    document.getElementById("compatibility-result").innerHTML = compatibilityHtml(person, partner);
+  }
+  document.getElementById("results").style.display = "block";
+}
+
+document.getElementById("include-partner").addEventListener("change", event => {
+  document.getElementById("partner-fields").style.display = event.target.checked ? "block" : "none";
+});
+document.getElementById("calculate").addEventListener("click", calculate);
+</script>
+</body>
+</html>

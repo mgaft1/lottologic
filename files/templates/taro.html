@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taro Cards</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+:root {
+  --bg: #f5f1ff;
+  --ink: #241844;
+  --muted: #6c6480;
+  --panel: rgba(255, 255, 255, 0.92);
+  --line: rgba(61, 39, 107, 0.16);
+  --accent: #6d42d8;
+  --accent-2: #9a67ef;
+  --shadow: 0 24px 60px rgba(58, 35, 106, 0.16);
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(137, 95, 246, 0.20), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(255, 190, 92, 0.18), transparent 28%),
+    linear-gradient(180deg, #fbfaff 0%, var(--bg) 100%);
+}
+#navbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+}
+#navbar a {
+  color: #fff;
+  font-size: 1.08rem;
+  font-weight: 700;
+  padding: 7px 13px;
+  text-decoration: none;
+  background: #4488ff;
+  border: 1px solid #2266dd;
+  border-radius: 4px;
+}
+#navbar a:hover { background: #3d7cf0; }
+#navbar .nav-logout {
+  margin-left: auto;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}
+main {
+  width: min(1100px, calc(100% - 32px));
+  margin: 30px auto 56px;
+}
+.intro { text-align: center; margin-bottom: 20px; }
+h1 { margin: 0 0 8px; font-size: clamp(2rem, 4vw, 3rem); }
+.intro p { margin: 0; color: var(--muted); }
+.panel {
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+}
+.question-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+}
+input, textarea, button { font: inherit; }
+#question {
+  width: 100%;
+  padding: 14px 16px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  outline: none;
+}
+#question:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(109, 66, 216, 0.13); }
+button {
+  cursor: pointer;
+  padding: 12px 22px;
+  color: #fff;
+  font-weight: 800;
+  border: 0;
+  border-radius: 11px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+button:hover { filter: brightness(1.06); }
+.error { min-height: 22px; margin: 8px 0 0; color: #b3261e; }
+#reading { display: none; margin-top: 22px; }
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.card-slot { text-align: center; }
+.position { margin-bottom: 9px; color: var(--accent); font-size: 1.05rem; font-weight: 900; }
+.card-frame {
+  width: min(100%, 230px);
+  margin: auto;
+  filter: drop-shadow(0 14px 18px rgba(48, 31, 84, 0.20));
+  transition: transform 0.2s ease;
+}
+.card-frame:hover { transform: translateY(-4px); }
+.card-frame.reversed img { transform: rotate(180deg); }
+.card-frame img { display: block; width: 100%; border-radius: 13px; }
+.card-name { margin: 10px 0 2px; font-weight: 900; }
+.orientation { color: var(--muted); font-size: 0.92rem; }
+.explanation-label { display: block; margin: 24px 0 8px; font-weight: 900; }
+#explanation {
+  width: 100%;
+  min-height: 220px;
+  padding: 16px;
+  resize: vertical;
+  color: var(--ink);
+  line-height: 1.55;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fcfbff;
+}
+.note { margin: 11px 0 0; color: var(--muted); font-size: 0.9rem; }
+#reading-source { margin: 8px 0 0; color: var(--muted); font-size: 0.88rem; }
+@media (max-width: 720px) {
+  #navbar { flex-wrap: wrap; padding: 12px; gap: 8px; }
+  #navbar a { font-size: 0.92rem; padding: 6px 9px; }
+  #navbar .nav-logout { margin-left: 0; }
+  .question-row { grid-template-columns: 1fr; }
+  .cards { gap: 10px; }
+  .panel { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div id="navbar">
+  <a href="/home">Home</a>
+  <a href="/">Lotto Viewer</a>
+  <a href="/gaps">Time Gaps</a>
+  <a href="/tickets">Predictions</a>
+  <a href="/links">Links</a>
+  <a href="/logout" class="nav-logout">Sign out</a>
+</div>
+
+<main>
+  <div class="intro">
+    <h1>Taro Cards</h1>
+    <p>Ask a question and draw a three-card reading: background, present, and direction.</p>
+  </div>
+  <section class="panel">
+    <div class="question-row">
+      <input id="question" type="text" maxlength="240" placeholder="Ask your question!" autocomplete="off">
+      <button id="draw" type="button">Draw Cards</button>
+    </div>
+    <p id="error" class="error"></p>
+
+    <div id="reading">
+      <div id="cards" class="cards"></div>
+      <label class="explanation-label" for="explanation">Your reading</label>
+      <textarea id="explanation" readonly></textarea>
+      <p id="reading-source"></p>
+      <p class="note">Use the reading as a prompt for reflection, not as a prediction or professional advice.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+const major = [
+  ["The Fool", "a fresh beginning, curiosity, and a willingness to take a thoughtful leap", "a pause before starting, or a need to look more carefully before leaping"],
+  ["The Magician", "resourcefulness, focus, and the ability to turn intention into action", "scattered energy or a need to use your abilities more deliberately"],
+  ["The High Priestess", "intuition, patience, and attention to what has not yet been said", "a hidden factor or an inner signal that is being ignored"],
+  ["The Empress", "growth, care, creativity, and a supportive environment", "overextension or a reminder to replenish your own energy"],
+  ["The Emperor", "structure, boundaries, and practical leadership", "rigidity or a structure that needs to become more flexible"],
+  ["The Hierophant", "tradition, shared values, and learning from established wisdom", "a reason to question convention and find a more personal path"],
+  ["The Lovers", "alignment, meaningful choice, and honest connection", "mixed priorities or a choice that calls for clearer values"],
+  ["The Chariot", "determination, direction, and disciplined forward movement", "competing impulses or an effort that needs steadier control"],
+  ["Strength", "quiet courage, patience, and compassionate self-command", "self-doubt or a moment to choose gentleness over force"],
+  ["The Hermit", "reflection, perspective, and a useful step back from noise", "isolation or a need to bring your insight back into conversation"],
+  ["Wheel of Fortune", "a turning point, changing circumstances, and a new cycle", "resistance to change or a recurring pattern worth noticing"],
+  ["Justice", "fairness, accountability, and clear-eyed decision making", "an imbalance or a detail that should be examined honestly"],
+  ["The Hanged Man", "a pause, a different viewpoint, and the value of letting go", "stagnation or a delay that has stopped being useful"],
+  ["Death", "transition, closure, and making room for a necessary new chapter", "holding tightly to something whose season is ending"],
+  ["Temperance", "balance, moderation, and the patient blending of different needs", "excess or a situation that needs a calmer pace"],
+  ["The Devil", "attachment, temptation, and an opportunity to reclaim choice", "loosening an old grip and recognizing that change is possible"],
+  ["The Tower", "a sudden truth, a shake-up, and the clearing of an unstable foundation", "avoiding a needed change or rebuilding after disruption"],
+  ["The Star", "hope, renewal, and a return to a guiding sense of purpose", "discouragement or a need to reconnect with what restores you"],
+  ["The Moon", "uncertainty, imagination, and the need to move carefully through ambiguity", "confusion beginning to lift or a fear ready to be named"],
+  ["The Sun", "clarity, warmth, confidence, and a reason for optimism", "a delayed success or a reminder not to overlook simple joy"],
+  ["Judgement", "reflection, awakening, and a chance to answer a meaningful call", "hesitation to learn from the past or to make a final decision"],
+  ["The World", "completion, integration, and recognition of how far you have come", "unfinished business or one last step before closure"]
+];
+const suits = {
+  Wands: ["energy, initiative, and creative momentum", "rushed effort or energy that needs a clearer aim"],
+  Cups: ["emotion, relationships, and intuitive understanding", "an emotional block or a feeling that deserves honest attention"],
+  Swords: ["thought, communication, and a need for clarity", "mental strain, crossed signals, or a belief worth reconsidering"],
+  Pentacles: ["practical matters, resources, and steady progress", "a practical delay or a need to review priorities"]
+};
+const ranks = [
+  ["Ace", "a new opening"], ["Two", "a choice or partnership"], ["Three", "early growth and collaboration"],
+  ["Four", "stability and consolidation"], ["Five", "a challenge that reveals what matters"], ["Six", "adjustment and forward movement"],
+  ["Seven", "assessment and patience"], ["Eight", "focused effort and development"], ["Nine", "experience approaching completion"],
+  ["Ten", "a cycle reaching its result"], ["Page", "curiosity and a message"], ["Knight", "active pursuit"],
+  ["Queen", "mature understanding"], ["King", "responsibility and command"]
+];
+const positions = [
+  ["Background", "The background of your question is shaped by"],
+  ["Present", "Your present situation asks you to consider"],
+  ["Direction", "A useful direction from here is suggested by"]
+];
+const suitSymbols = { Wands: "&#10038;", Cups: "&#9829;", Swords: "&#10013;", Pentacles: "&#9670;" };
+
+const deck = major.map((card, index) => ({
+  name: card[0], upright: card[1], reversed: card[2], group: "Major Arcana", symbol: roman(index), number: index
+}));
+for (const [suit, meanings] of Object.entries(suits)) {
+  ranks.forEach(([rank, rankMeaning], index) => deck.push({
+    name: `${rank} of ${suit}`,
+    upright: `${rankMeaning}, expressed through ${meanings[0]}`,
+    reversed: `${rankMeaning}, but with ${meanings[1]}`,
+    group: suit,
+    symbol: suitSymbols[suit],
+    number: index + 1
+  }));
+}
+
+function roman(number) {
+  if (number === 0) return "0";
+  const values = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+  let result = "";
+  for (const [value, digit] of values) while (number >= value) { result += digit; number -= value; }
+  return result;
+}
+
+function art(card) {
+  const isMajor = card.group === "Major Arcana";
+  const hue = isMajor ? 267 : { Wands: 25, Cups: 345, Swords: 205, Pentacles: 145 }[card.group];
+  const symbol = isMajor ? "&#10022;" : card.symbol;
+  const safeName = card.name.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 420">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="hsl(${hue} 68% 27%)"/><stop offset="1" stop-color="hsl(${hue} 64% 52%)"/></linearGradient></defs>
+    <rect x="4" y="4" width="252" height="412" rx="15" fill="#fffaf0" stroke="hsl(${hue} 60% 30%)" stroke-width="8"/>
+    <rect x="18" y="18" width="224" height="384" rx="9" fill="url(#g)" stroke="#f7dc92" stroke-width="2"/>
+    <circle cx="130" cy="174" r="83" fill="none" stroke="#f7dc92" stroke-width="3" opacity=".8"/>
+    <circle cx="130" cy="174" r="64" fill="none" stroke="#fff2bd" stroke-width="2" opacity=".7"/>
+    <path d="M130 80 L151 145 L220 145 L164 185 L185 251 L130 211 L75 251 L96 185 L40 145 L109 145 Z" fill="none" stroke="#fff2bd" stroke-width="2" opacity=".7"/>
+    <text x="130" y="200" text-anchor="middle" font-family="Georgia,serif" font-size="76" fill="#fff4c7">${symbol}</text>
+    <text x="31" y="51" font-family="Georgia,serif" font-size="18" fill="#fff4c7">${card.number}</text>
+    <text x="130" y="311" text-anchor="middle" font-family="Georgia,serif" font-size="19" font-weight="bold" fill="#fffaf0">${safeName}</text>
+    <text x="130" y="344" text-anchor="middle" font-family="Georgia,serif" font-size="15" fill="#f7dc92">${card.group}</text>
+    <text x="130" y="382" text-anchor="middle" font-family="Georgia,serif" font-size="17" fill="#fff4c7">${isMajor ? card.symbol : symbol}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function shuffledDeck() {
+  const cards = [...deck];
+  for (let i = cards.length - 1; i > 0; i--) {
+    const random = new Uint32Array(1);
+    crypto.getRandomValues(random);
+    const j = random[0] % (i + 1);
+    [cards[i], cards[j]] = [cards[j], cards[i]];
+  }
+  return cards;
+}
+
+async function draw() {
+  const question = document.getElementById("question").value.trim();
+  const error = document.getElementById("error");
+  const drawButton = document.getElementById("draw");
+  if (!question) {
+    error.textContent = "Please type a question before drawing the cards.";
+    document.getElementById("question").focus();
+    return;
+  }
+  error.textContent = "";
+  const cards = shuffledDeck().slice(0, 3).map(card => ({ ...card, isReversed: Math.random() < 0.32 }));
+  document.getElementById("cards").innerHTML = cards.map((card, index) => `
+    <article class="card-slot">
+      <div class="position">${positions[index][0]}</div>
+      <div class="card-frame ${card.isReversed ? "reversed" : ""}">
+        <img src="${art(card)}" alt="${card.name}${card.isReversed ? ", reversed" : ""}">
+      </div>
+      <div class="card-name">${card.name}</div>
+      <div class="orientation">${card.isReversed ? "Reversed" : "Upright"}</div>
+    </article>`).join("");
+
+  const explanation = document.getElementById("explanation");
+  const source = document.getElementById("reading-source");
+  explanation.value = "Reading the cards in the context of your question...";
+  source.textContent = "";
+  document.getElementById("reading").style.display = "block";
+
+  drawButton.disabled = true;
+  drawButton.textContent = "Reading...";
+  try {
+    const response = await fetch("/api/taro/interpret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        cards: cards.map(card => ({
+          name: card.name,
+          isReversed: card.isReversed,
+          meaning: card.isReversed ? card.reversed : card.upright
+        }))
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not interpret the cards.");
+    explanation.value = data.interpretation;
+    source.textContent = data.note || (data.source === "openai" ? "AI-assisted interpretation." : "");
+    if (data.diagnostic) source.textContent += ` Debug: ${data.diagnostic}`;
+  } catch (err) {
+    explanation.value = "";
+    error.textContent = err.message || "Could not interpret the cards. Please try again.";
+  } finally {
+    drawButton.disabled = false;
+    drawButton.textContent = "Draw Cards";
+  }
+}
+
+document.getElementById("draw").addEventListener("click", draw);
+document.getElementById("question").addEventListener("keydown", event => {
+  if (event.key === "Enter") draw();
+});
+</script>
+</body>
+</html>

@@ -7,8 +7,10 @@ Background scraper fills missing draws; never blocks rendering.
 
 import logging
 import os
+import re
 import sys
 import threading
+import requests
 from itertools import product
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -710,6 +712,418 @@ def logout():
 @login_required
 def home():
     return render_template("home.html")
+
+
+@app.route("/taro")
+@login_required
+def taro_page():
+    return render_template("taro.html")
+
+
+@app.route("/numerology")
+@login_required
+def numerology_page():
+    return render_template("numerology.html")
+
+
+TARO_READER_INSTRUCTIONS = """You are an experienced traditional Tarot reader speaking directly to a client.
+Interpret the three-card spread in the context of the client's actual question. Use the cards as a lens for
+thoughtful guidance, not as proof of supernatural certainty.
+
+Write a cohesive reading of 350 to 500 words. Start by answering the question directly and honestly. Explain
+the symbolism of each card in plain English, including what its spread position and upright or reversed
+orientation contribute. Then explain how the cards reinforce, challenge, or modify one another. Make specific
+observations tied to the client's question. Avoid generic self-help advice, canned phrases such as "invites
+reflection," and abstract filler such as "expressed through emotion." Do not merely list three separate card
+definitions. End with one practical takeaway.
+
+For health, legal, financial, or safety-related questions, make clear that the reading is reflective guidance
+and not a factual prediction or professional advice. Never promise an outcome."""
+
+
+def _taro_output_text(response_json):
+    parts = []
+    for item in response_json.get("output", []):
+        if item.get("type") != "message":
+            continue
+        for content in item.get("content", []):
+            if content.get("type") == "output_text" and content.get("text"):
+                parts.append(content["text"].strip())
+    return "\n\n".join(part for part in parts if part)
+
+
+TARO_THEMES = (
+    ("spiritual connection", {"spiritual", "spiritually", "spirituality", "soul", "souls", "faith", "community", "belong", "belonging", "people", "friends", "friendship"}),
+    ("relationship", {"love", "relationship", "partner", "marry", "marriage", "dating", "romance", "romantic"}),
+    ("financial", {"rich", "money", "financial", "income", "wealth", "wealthy", "debt", "afford", "investment"}),
+    ("career", {"job", "career", "business", "work", "promotion", "profession", "employment"}),
+    ("health", {"health", "ill", "sick", "doctor", "healing", "medical"}),
+    ("decision", {"choose", "choice", "decide", "decision", "should", "whether"}),
+)
+
+TARO_THEME_OPENERS = {
+    "spiritual connection": "The cards lean toward connection being possible, but they describe the kind of openness and clarity that will help you recognize the right people.",
+    "relationship": "The cards describe the relationship pattern around your question rather than promising a fixed romantic outcome.",
+    "financial": "The cards do not promise sudden wealth. They point to the habits, opportunities, and cautions that matter most in your financial question.",
+    "career": "The cards show a workable direction in your career question, with attention to both opportunity and the effort it will require.",
+    "health": "The cards can help you reflect on your experience, but they cannot diagnose a condition or replace medical advice.",
+    "decision": "The cards do not make the decision for you. They clarify what is influencing the choice and what deserves closer attention.",
+    "general": "The spread does not give a guaranteed prediction. It describes the pattern around your question and the next useful point of attention.",
+}
+
+TARO_MAJOR_MEANINGS = {
+    "The Fool": ("The Fool is the traveler at the start of the road. It points to openness, experimentation, and entering unfamiliar territory without needing every answer first.", "The Fool reversed warns against confusing openness with carelessness. A new beginning may still be possible, but it needs better judgment and a slower first step."),
+    "The Magician": ("The Magician has tools laid out on the table and knows how to use them. It points to skill, initiative, and turning an idea into something concrete.", "The Magician reversed suggests talent without focus, mixed motives, or effort scattered across too many directions."),
+    "The High Priestess": ("The High Priestess sits between the visible and hidden worlds. She points to intuition, private knowledge, and information that has not fully surfaced yet.", "The High Priestess reversed suggests that a quiet signal is being overlooked or that uncertainty is being mistaken for intuition."),
+    "The Empress": ("The Empress represents nourishment and growth. She points to conditions in which connection, creativity, or practical abundance can develop naturally.", "The Empress reversed suggests overgiving, neglecting your own needs, or trying to force growth before the conditions are ready."),
+    "The Emperor": ("The Emperor represents structure and boundaries. He points to a need for a clear plan, firm standards, and dependable action.", "The Emperor reversed warns that control or rigidity may be getting in the way of a more workable structure."),
+    "The Hierophant": ("The Hierophant represents shared beliefs, tradition, and learning in community. It often points to teachers, established groups, or values held in common.", "The Hierophant reversed suggests that an inherited rule or conventional path may not fit; a more personal understanding is needed."),
+    "The Lovers": ("The Lovers is about alignment before it is about romance. It points to a meaningful choice, mutual recognition, and acting in a way that matches your values.", "The Lovers reversed suggests mixed signals, competing values, or a connection that cannot deepen until a choice is made honestly."),
+    "The Chariot": ("The Chariot moves because opposing forces are held in one direction. It points to momentum, discipline, and actively steering events.", "The Chariot reversed suggests competing priorities or a push for progress that lacks a clear direction."),
+    "Strength": ("Strength shows calm influence rather than force. It points to patience, courage, and handling a sensitive situation without overpowering it.", "Strength reversed suggests self-doubt or the temptation to push too hard because confidence is wavering."),
+    "The Hermit": ("The Hermit carries a lantern and steps away from noise to see more clearly. It points to solitude, discernment, and a search for what is genuine.", "The Hermit reversed warns that useful solitude may have become isolation or that too much analysis is delaying re-entry into the world."),
+    "Wheel of Fortune": ("The Wheel of Fortune marks a change in conditions. It points to timing, cycles, and an opening created by movement that is already underway.", "The Wheel of Fortune reversed suggests a repeated pattern or frustration with timing; the cycle needs to be understood before it can change."),
+    "Justice": ("Justice weighs what is true and proportionate. It points to accountability, honest assessment, and choices with clear consequences.", "Justice reversed suggests an imbalance, an incomplete picture, or a need to examine where responsibility has been avoided."),
+    "The Hanged Man": ("The Hanged Man pauses willingly to see the situation from another angle. It points to delay with a purpose and the value of releasing an old assumption.", "The Hanged Man reversed suggests stagnation: waiting is no longer producing insight and a different action is needed."),
+    "Death": ("Death represents a necessary ending and the space it creates for change. It points to transition, not literal death.", "Death reversed suggests resistance to an ending or an attempt to preserve a pattern that has already run its course."),
+    "Temperance": ("Temperance blends different elements carefully. It points to moderation, gradual progress, and finding a combination that can last.", "Temperance reversed warns of extremes, poor pacing, or ingredients that have not yet been brought into balance."),
+    "The Devil": ("The Devil reveals what has a grip on you: fear, temptation, habit, or an agreement that no longer feels voluntary. Seeing the attachment clearly is the first step toward choice.", "The Devil reversed suggests that an old attachment is loosening and that more freedom is available than you may have assumed."),
+    "The Tower": ("The Tower is the moment an unstable structure can no longer pretend to be secure. It points to disruption, blunt truth, and necessary rebuilding.", "The Tower reversed suggests an avoided change or an internal shake-up that has not yet been addressed openly."),
+    "The Star": ("The Star appears after upheaval and represents renewed orientation. It points to hope grounded in healing, honesty, and a clearer sense of what matters.", "The Star reversed suggests discouragement or a loss of confidence that makes a real possibility harder to see."),
+    "The Moon": ("The Moon lights a path without making everything clear. It points to ambiguity, imagination, and the need to distinguish intuition from fear.", "The Moon reversed suggests that confusion is beginning to lift, although some assumptions still need to be tested."),
+    "The Sun": ("The Sun brings visibility and warmth. It points to confidence, openness, and a situation becoming easier to understand.", "The Sun reversed suggests that a positive development is delayed, muted, or harder to enjoy because expectations are too rigid."),
+    "Judgement": ("Judgement is a wake-up call. It points to reviewing the past honestly and answering a call that is difficult to ignore.", "Judgement reversed suggests hesitation to make a necessary decision or a harsh self-assessment that is preventing movement."),
+    "The World": ("The World represents completion and integration. It points to reaching a threshold, recognizing progress, and stepping into a wider field of experience.", "The World reversed suggests unfinished business or one remaining step before a cycle can close."),
+}
+
+TARO_SUIT_MEANINGS = {
+    "Wands": "Wands deal with initiative, enthusiasm, creativity, and the courage to act",
+    "Cups": "Cups deal with feelings, belonging, relationships, and emotional recognition",
+    "Swords": "Swords deal with thought, truth, communication, and decisions that need clear language",
+    "Pentacles": "Pentacles deal with work, resources, reliability, and results that grow through consistent effort",
+}
+
+TARO_RANK_MEANINGS = {
+    "Ace": "an opening or a new possibility",
+    "Two": "a choice, exchange, or balancing of two sides",
+    "Three": "development through participation, cooperation, or early results",
+    "Four": "stability, protection, or a pattern becoming settled",
+    "Five": "friction, lack, or a challenge that exposes what needs attention",
+    "Six": "movement after difficulty, reciprocity, or the influence of the past",
+    "Seven": "assessment, patience, and deciding what is worth continued effort",
+    "Eight": "practice, momentum, or a situation becoming more focused",
+    "Nine": "maturity, self-sufficiency, or the final stretch before completion",
+    "Ten": "the full result of a pattern, including both its rewards and its burdens",
+    "Page": "curiosity, learning, or a message that deserves attention",
+    "Knight": "pursuit, movement, and the way an intention is acted upon",
+    "Queen": "inward mastery, discernment, and a mature way of holding the suit's energy",
+    "King": "outward mastery, responsibility, and directing the suit's energy deliberately",
+}
+
+TARO_MINOR_MEANINGS = {
+    "Wands": {
+        "Ace": ("a spark of energy and a promising reason to begin", "a promising start that is delayed or losing momentum"),
+        "Two": ("planning the next move while looking beyond familiar territory", "hesitation about expanding beyond what already feels safe"),
+        "Three": ("progress becoming visible after an initial effort", "progress slowed by weak planning or unrealistic expectations"),
+        "Four": ("a stable milestone, welcome, or reason to celebrate", "instability beneath the surface or difficulty settling into a place"),
+        "Five": ("competition, conflicting agendas, or productive friction", "conflict being avoided, or energy wasted on the wrong contest"),
+        "Six": ("recognition, confidence, and an effort receiving a response", "a need for recognition that is not being met"),
+        "Seven": ("holding your ground when your position is tested", "exhaustion, defensiveness, or uncertainty about what is worth defending"),
+        "Eight": ("movement, messages, and events gathering speed", "delays, crossed signals, or activity without direction"),
+        "Nine": ("persistence after experience has taught caution", "weariness or expecting another setback before it happens"),
+        "Ten": ("a worthwhile effort becoming too heavy to carry alone", "a burden that must be delegated, reduced, or put down"),
+        "Page": ("curiosity, a new interest, or news that awakens enthusiasm", "excitement without follow-through or a message that needs verification"),
+        "Knight": ("bold pursuit and a willingness to act quickly", "impulsiveness, inconsistency, or energy that burns out too fast"),
+        "Queen": ("warm confidence and the ability to encourage growth", "self-doubt, jealousy, or confidence that depends too much on approval"),
+        "King": ("vision, leadership, and the confidence to direct an effort", "dominating the situation or pursuing ambition without enough restraint"),
+    },
+    "Cups": {
+        "Ace": ("an emotional opening and a genuine capacity for connection", "feelings held back, emotional fatigue, or difficulty receiving care"),
+        "Two": ("mutual recognition, attraction, or a meeting of equals", "misalignment, distance, or a connection that needs an honest conversation"),
+        "Three": ("friendship, shared joy, and support found in community", "social strain, overindulgence, or a circle that does not feel fully trustworthy"),
+        "Four": ("emotional withdrawal and the risk of overlooking an available opening", "renewed interest after a period of disengagement"),
+        "Five": ("disappointment and attention fixed on what has been lost", "acceptance beginning to return after disappointment"),
+        "Six": ("familiarity, memory, and a connection that feels known or sincere", "being held too tightly by the past or idealizing what used to be"),
+        "Seven": ("many appealing possibilities that need to be judged realistically", "confusion lifting as priorities become clearer"),
+        "Eight": ("leaving something emotionally incomplete because it no longer satisfies", "hesitation to walk away from a familiar but unfulfilling pattern"),
+        "Nine": ("satisfaction and the enjoyment of a wish taking shape", "pleasure that does not fully satisfy or expectations becoming inflated"),
+        "Ten": ("lasting emotional fulfillment, belonging, and a sense of shared happiness", "an ideal of happiness that may be masking strain or unmet expectations"),
+        "Page": ("a sincere message, emotional curiosity, or a gentle new beginning", "emotional immaturity, mixed signals, or sensitivity that is hard to express"),
+        "Knight": ("a heartfelt invitation and the wish to pursue what feels meaningful", "romanticizing the situation or making promises that lack grounding"),
+        "Queen": ("empathy, emotional depth, and the ability to understand what is not said", "overwhelm, blurred boundaries, or feelings clouding judgment"),
+        "King": ("emotional maturity and calm judgment under pressure", "feelings being tightly controlled, emotional inconsistency, or generosity without boundaries"),
+    },
+    "Swords": {
+        "Ace": ("a clear realization, an honest conversation, or a decisive new idea", "confusion, a truth avoided, or a conversation that lacks clarity"),
+        "Two": ("a difficult choice being held in suspension", "a delayed decision becoming harder to avoid"),
+        "Three": ("painful truth, disappointment, or words that cannot be unheard", "healing after hurt, or pain that still needs acknowledgment"),
+        "Four": ("rest, recovery, and the need to pause before acting again", "restlessness or returning to activity before recovery is complete"),
+        "Five": ("conflict in which winning may cost more than expected", "a chance to de-escalate conflict or release resentment"),
+        "Six": ("moving away from difficulty toward a calmer situation", "difficulty leaving a troubled pattern behind"),
+        "Seven": ("strategy, discretion, or a situation where motives need scrutiny", "a concealed issue coming into view or a strategy that is not working"),
+        "Eight": ("feeling trapped by assumptions, fear, or limited options", "recognizing that more choices exist than first appeared"),
+        "Nine": ("worry, sleeplessness, or a fear becoming larger in private", "anxiety easing, or the need to seek support instead of carrying it alone"),
+        "Ten": ("a painful ending that also makes continuation impossible", "slow recovery after an ending or reluctance to accept that a chapter is over"),
+        "Page": ("alertness, questions, and the need to gather better information", "gossip, premature conclusions, or watching without understanding"),
+        "Knight": ("direct action and a willingness to confront an issue", "recklessness, harsh words, or acting before the facts are clear"),
+        "Queen": ("discernment, independence, and a preference for honest language", "bitterness, cutting communication, or judgment shaped by old hurt"),
+        "King": ("clear analysis, standards, and decisions based on evidence", "cold reasoning, rigid judgment, or using intellect to dominate"),
+    },
+    "Pentacles": {
+        "Ace": ("a tangible opening involving work, money, health, or long-term stability", "a practical opportunity delayed, missed, or poorly prepared for"),
+        "Two": ("balancing competing demands while keeping resources in motion", "too many demands, weak budgeting, or difficulty keeping priorities balanced"),
+        "Three": ("skill, collaboration, and work that improves through feedback", "poor coordination or effort that is not being valued properly"),
+        "Four": ("holding resources carefully and protecting what has been built", "fear-driven control, overspending, or a need to loosen an overly tight grip"),
+        "Five": ("financial strain, exclusion, or the feeling of facing difficulty alone", "recovery becoming possible when support is accepted"),
+        "Six": ("a practical exchange of support, generosity, or fair compensation", "strings attached, unequal exchange, or giving more than is sustainable"),
+        "Seven": ("patient assessment of whether steady effort is producing enough return", "impatience, poor return on effort, or a plan that needs adjustment"),
+        "Eight": ("practice, craftsmanship, and improvement through disciplined repetition", "repetitive effort without improvement or standards slipping"),
+        "Nine": ("self-sufficiency and the reward of choices made carefully over time", "dependence, financial insecurity, or appearances that cost too much to maintain"),
+        "Ten": ("lasting security, family resources, and stability that extends beyond the present", "financial instability, family conflict over resources, or weak long-term planning"),
+        "Page": ("a practical opportunity to learn, plan, or begin building", "procrastination, weak planning, or a practical lesson not yet taken seriously"),
+        "Knight": ("reliability, patience, and progress made through consistent effort", "stagnation, stubborn routine, or effort continuing without a useful review"),
+        "Queen": ("practical care, resourcefulness, and creating stability in daily life", "overextension, work-life imbalance, or neglecting your own practical needs"),
+        "King": ("financial maturity, dependable leadership, and stewardship of resources", "materialism, inflexibility, or measuring success too narrowly"),
+    },
+}
+
+TARO_THEME_SUIT_LENSES = {
+    "spiritual connection": {
+        "Wands": "For a spiritual-connection question, Wands point to taking initiative: going where shared interests are practiced rather than waiting for kindred people to appear.",
+        "Cups": "For a spiritual-connection question, Cups point to emotional recognition and the feeling of being understood without having to perform a version of yourself.",
+        "Swords": "For a spiritual-connection question, Swords point to honest conversation: naming your values clearly enough for compatible people to recognize them.",
+        "Pentacles": "For a spiritual-connection question, Pentacles point to regular participation in a grounded community, not a single dramatic encounter.",
+    },
+    "relationship": {
+        "Wands": "In a relationship question, Wands emphasize attraction, initiative, and whether both people are willing to make something happen.",
+        "Cups": "In a relationship question, Cups emphasize emotional availability, affection, and whether the connection feels mutual.",
+        "Swords": "In a relationship question, Swords emphasize communication, expectations, and truths that need to be said plainly.",
+        "Pentacles": "In a relationship question, Pentacles emphasize reliability: what someone consistently does matters more than a promising moment.",
+    },
+    "financial": {
+        "Wands": "In a money question, Wands emphasize initiative, a new venture, or the energy required to pursue an opportunity.",
+        "Cups": "In a money question, Cups ask whether emotion, generosity, or the wish for security is shaping a financial choice.",
+        "Swords": "In a money question, Swords emphasize research, negotiation, and a decision that needs accurate information.",
+        "Pentacles": "In a money question, Pentacles are especially literal: they emphasize income, savings, assets, and progress built through repeatable habits.",
+    },
+    "career": {
+        "Wands": "In a career question, Wands point to ambition, initiative, and work that gives you room to create or lead.",
+        "Cups": "In a career question, Cups emphasize the human side of work: morale, collaboration, and whether the work feels meaningful.",
+        "Swords": "In a career question, Swords emphasize planning, communication, and a decision that may require a candid conversation.",
+        "Pentacles": "In a career question, Pentacles emphasize skill, dependable work, and results that can be demonstrated over time.",
+    },
+    "decision": {
+        "Wands": "In a decision question, Wands ask which option has real momentum rather than momentary excitement.",
+        "Cups": "In a decision question, Cups ask which option is emotionally honest and sustainable.",
+        "Swords": "In a decision question, Swords ask what the evidence says once assumptions are separated from facts.",
+        "Pentacles": "In a decision question, Pentacles ask which option is practical, stable, and workable in daily life.",
+    },
+}
+
+
+def _taro_theme(question):
+    words = set(re.findall(r"[a-z]+", question.lower()))
+    for theme, keywords in TARO_THEMES:
+        if words.intersection(keywords):
+            return theme
+    return "general"
+
+
+def _offline_card_meaning(card, theme):
+    name = card["name"]
+    reversed_card = card["orientation"] == "reversed"
+    if name in TARO_MAJOR_MEANINGS:
+        return TARO_MAJOR_MEANINGS[name][1 if reversed_card else 0]
+
+    rank, separator, suit = name.partition(" of ")
+    if separator and rank in TARO_MINOR_MEANINGS.get(suit, {}):
+        return TARO_MINOR_MEANINGS[suit][rank][1 if reversed_card else 0].capitalize() + "."
+    return card["meaning"].capitalize() + "."
+
+
+def _offline_spread_relationship(cards):
+    suits = [card["name"].partition(" of ")[2] for card in cards]
+    suits = [suit for suit in suits if suit in TARO_SUIT_MEANINGS]
+    repeated_suit = next((suit for suit in TARO_SUIT_MEANINGS if suits.count(suit) >= 2), None)
+    major_count = sum(card["name"] in TARO_MAJOR_MEANINGS for card in cards)
+    reversed_count = sum(card["orientation"] == "reversed" for card in cards)
+    observations = []
+    if repeated_suit:
+        observations.append(
+            f"The repeated {repeated_suit} cards are the strongest thread in the spread. "
+            f"{TARO_SUIT_MEANINGS[repeated_suit]}."
+        )
+    if major_count >= 2:
+        observations.append(
+            "With more than one Major Arcana card, this looks less like a passing mood and more like a larger pattern or turning point."
+        )
+    if reversed_count >= 2:
+        observations.append(
+            "Because two or more cards are reversed, the main issue is not simply outside circumstances. Some part of the pattern is blocked, delayed, or being handled indirectly."
+        )
+    elif reversed_count == 0:
+        observations.append(
+            "All three cards are upright, so the spread reads as relatively direct: the next step is more about acting on what is visible than uncovering a hidden obstacle."
+        )
+    return " ".join(observations)
+
+
+def _offline_financial_action(card):
+    actions = {
+        "Ace of Pentacles": "take a tangible opportunity seriously and make a concrete plan for it",
+        "Four of Pentacles": "review whether fear is making you grip money too tightly in some places while handling it reactively in others",
+        "Five of Pentacles": "seek practical support instead of treating financial strain as something you must solve in isolation",
+        "Seven of Pentacles": "review which efforts are actually producing a return and stop feeding the ones that are not",
+        "Eight of Pentacles": "build a skill or repeatable habit that improves your earning power over time",
+        "Nine of Pentacles": "favor independence and choices that strengthen your long-term stability",
+        "Ten of Pentacles": "think beyond a quick gain and plan for durable security",
+        "King of Cups": "notice where emotion, generosity, or the wish to feel secure is influencing your money decisions",
+    }
+    advice = actions.get(card["name"])
+    if advice:
+        return advice
+    return f'use the lesson of {card["name"]} as a practical test before making your next money decision'
+
+
+def _offline_taro_reading(question, cards):
+    theme = _taro_theme(question)
+    details = []
+    position_context = {
+        "Background": "Here it describes the experience or expectation that shaped the question.",
+        "Present": "This is the part of the situation asking for your attention now.",
+        "Direction": "This is the approach most likely to move the situation forward.",
+    }
+    for card in cards:
+        details.append(
+            f'{card["position"]} - {card["name"]}{card["orientation_suffix"]}\n'
+            f'{_offline_card_meaning(card, theme)} {position_context[card["position"]]}'
+        )
+
+    first, second, third = cards
+    relationship = _offline_spread_relationship(cards)
+    if relationship:
+        relationship = "\n\nHow the cards work together\n" + relationship
+    if theme == "spiritual connection":
+        closing = (
+            f'{first["name"]} suggests that your question begins with a real desire for belonging, not simply '
+            f'with wanting more acquaintances. {second["name"]} brings the focus to the kind of connection '
+            f'that can feel familiar, reciprocal, or rooted in shared experience. {third["name"]} says the next '
+            f'step is clarity: speak naturally but plainly about what matters to you, and spend time in settings '
+            f'where those values can become visible in conversation. The cards favor recognition through honest '
+            f'exchange over waiting for an unmistakable sign.'
+        )
+    elif theme == "financial":
+        closing = (
+            f'The direct answer is that these cards do not point to sudden riches, but they do leave room for '
+            f'meaningful financial improvement. {first["name"]} suggests that the question is partly shaped by '
+            f'how money feels, not only by the numbers. {second["name"]} says to {_offline_financial_action(second)}. '
+            f'{third["name"]} adds a caution: {_offline_financial_action(third)}. This spread favors wealth built '
+            f'gradually through clearer habits and better judgment, not a windfall.'
+        )
+    elif theme == "career":
+        closing = (
+            f'{first["name"]} shows the work pattern that brought you to the question. {second["name"]} identifies '
+            f'what is active now, while {third["name"]} describes the most useful next move. Look for the step '
+            f'you can carry out consistently and evaluate honestly rather than relying on a promised outcome.'
+        )
+    elif theme == "relationship":
+        closing = (
+            f'{first["name"]} shows the expectation or history behind the question. {second["name"]} describes '
+            f'the relationship dynamic that matters now, and {third["name"]} shows what should guide your next '
+            f'conversation or choice. Look for consistent behavior that matches the direction card rather than '
+            f'trying to force certainty from a single moment.'
+        )
+    else:
+        closing = (
+            f'{first["name"]} shows where the question began, but {second["name"]} is the center of the reading '
+            f'because it describes what is active now. {third["name"]} is the response: use that direction card '
+            f'as a specific test for your next choice or conversation rather than waiting for certainty.'
+        )
+    return (
+        f'Question: {question}\n\n'
+        f'{TARO_THEME_OPENERS[theme]}\n\n'
+        + "\n\n".join(details)
+        + relationship
+        + f'\n\nOverall reading\n{closing} This is reflective guidance, not a factual prediction or professional advice.'
+    )
+
+
+@app.route("/api/taro/interpret", methods=["POST"])
+@login_required
+def api_taro_interpret():
+    body = request.get_json(silent=True) or {}
+    question = str(body.get("question", "")).strip()
+    raw_cards = body.get("cards")
+    if not question:
+        return jsonify({"error": "Please type a question before drawing the cards."}), 400
+    if len(question) > 240:
+        return jsonify({"error": "Please keep the question under 240 characters."}), 400
+    if not isinstance(raw_cards, list) or len(raw_cards) != 3:
+        return jsonify({"error": "A three-card reading is required."}), 400
+
+    cards = []
+    expected_positions = ("Background", "Present", "Direction")
+    for index, raw_card in enumerate(raw_cards):
+        if not isinstance(raw_card, dict):
+            return jsonify({"error": "The card reading is invalid."}), 400
+        name = str(raw_card.get("name", "")).strip()[:80]
+        meaning = str(raw_card.get("meaning", "")).strip()[:300]
+        orientation = "reversed" if raw_card.get("isReversed") else "upright"
+        if not name or not meaning:
+            return jsonify({"error": "The card reading is incomplete."}), 400
+        cards.append({
+            "position": expected_positions[index],
+            "name": name,
+            "meaning": meaning,
+            "orientation": orientation,
+            "orientation_suffix": " (reversed)" if orientation == "reversed" else "",
+        })
+
+    fallback = _offline_taro_reading(question, cards)
+    offline_only = os.environ.get("OPENAI_TARO_OFFLINE_ONLY", "").strip().lower() in {"1", "true", "yes", "on"}
+    api_key = "" if offline_only else os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return jsonify({
+            "interpretation": fallback,
+            "source": "offline",
+            "note": "Using the built-in local interpretation.",
+        })
+
+    spread = "\n".join(
+        f'- {card["position"]}: {card["name"]} ({card["orientation"]}). Base meaning: {card["meaning"]}'
+        for card in cards
+    )
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": os.environ.get("OPENAI_TARO_MODEL", "gpt-5.4-mini"),
+                "instructions": TARO_READER_INSTRUCTIONS,
+                "input": f"Client question: {question}\n\nThree-card spread:\n{spread}",
+                "max_output_tokens": 900,
+            },
+            timeout=45,
+        )
+        response.raise_for_status()
+        interpretation = _taro_output_text(response.json())
+        if not interpretation:
+            raise ValueError("OpenAI returned an empty interpretation.")
+        return jsonify({"interpretation": interpretation, "source": "openai"})
+    except Exception as exc:
+        logger.exception("Could not generate OpenAI Tarot interpretation")
+        diagnostic = f"{type(exc).__name__}: {exc}"
+        if len(diagnostic) > 240:
+            diagnostic = diagnostic[:237] + "..."
+        return jsonify({
+            "interpretation": fallback,
+            "source": "offline",
+            "note": "The AI interpretation was unavailable, so the built-in interpretation is shown.",
+            "diagnostic": diagnostic if app.debug else None,
+        })
 
 
 @app.route("/tickets")

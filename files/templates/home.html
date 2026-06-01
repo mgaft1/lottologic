@@ -107,19 +107,19 @@ body {
   border-radius: 28px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
-  padding: 34px;
+  padding: 26px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
 .action-card {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 112px;
-  padding: 24px 28px;
-  border-radius: 24px;
+  min-height: 76px;
+  padding: 14px 24px;
+  border-radius: 20px;
   text-decoration: none;
   color: #ffffff;
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
@@ -135,7 +135,7 @@ body {
 }
 
 .action-card h3 {
-  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-size: clamp(1.35rem, 3.5vw, 1.9rem);
   font-weight: 900;
   letter-spacing: 0.01em;
   text-align: center;
@@ -157,12 +157,12 @@ body {
   }
 
   .actions {
-    padding: 28px;
+    padding: 20px;
   }
 
   .action-card {
-    min-height: 96px;
-    padding: 22px;
+    min-height: 68px;
+    padding: 12px 18px;
   }
 }
 </style>
@@ -176,6 +176,8 @@ body {
       <a href="/gaps">Time Gaps</a>
       <a href="/tickets">Predictions</a>
       <a href="/links">Links</a>
+      <a href="/taro">Taro Cards</a>
+      <a href="/numerology">Numerology</a>
     </div>
     <a href="/logout" class="logout">Sign out</a>
   </div>
@@ -197,6 +199,14 @@ body {
 
         <a class="action-card" href="/tickets">
           <h3>Predictions</h3>
+        </a>
+
+        <a class="action-card" href="/taro">
+          <h3>Taro Cards</h3>
+        </a>
+
+        <a class="action-card" href="/numerology">
+          <h3>Numerology</h3>
         </a>
       </section>
     </div>

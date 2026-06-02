@@ -117,29 +117,36 @@ def ticket_exists(lotto_type: str, draw_date: str, numbers: list[int]) -> bool:
 
 
 def add_ticket(lotto_type: str, draw_date: str, price: float, numbers: list[int], purchased: bool = True) -> int | None:
-    if ticket_exists(lotto_type, draw_date, numbers):
-        return None
-    with _conn() as con:
-        cur = con.execute(
-            """
-            INSERT INTO TicketSimSelections
-            (LottoType, DrawDate, Purchased, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                lotto_type,
-                draw_date,
-                1 if purchased else 0,
-                price,
-                numbers[0],
-                numbers[1],
-                numbers[2],
-                numbers[3],
-                numbers[4],
-                numbers[5] if len(numbers) > 5 else None,
-            ),
-        )
-        return int(cur.lastrowid)
+    for attempt in range(5):
+        try:
+            if ticket_exists(lotto_type, draw_date, numbers):
+                return None
+            with _conn() as con:
+                cur = con.execute(
+                    """
+                    INSERT INTO TicketSimSelections
+                    (LottoType, DrawDate, Purchased, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        lotto_type,
+                        draw_date,
+                        1 if purchased else 0,
+                        price,
+                        numbers[0],
+                        numbers[1],
+                        numbers[2],
+                        numbers[3],
+                        numbers[4],
+                        numbers[5] if len(numbers) > 5 else None,
+                    ),
+                )
+                return int(cur.lastrowid)
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower() or attempt == 4:
+                raise
+            time.sleep(0.2 * (attempt + 1))
+    return None
 
 
 def delete_ticket(ticket_id: int) -> bool:
@@ -175,12 +182,19 @@ def delete_optional_tickets(lotto_type: str, draw_date: str) -> int:
 
 
 def update_ticket_status(ticket_id: int, purchased: bool) -> bool:
-    with _conn() as con:
-        cur = con.execute(
-            "UPDATE TicketSimSelections SET Purchased = ? WHERE Id = ?",
-            (1 if purchased else 0, ticket_id),
-        )
-        return int(cur.rowcount or 0) > 0
+    for attempt in range(5):
+        try:
+            with _conn() as con:
+                cur = con.execute(
+                    "UPDATE TicketSimSelections SET Purchased = ? WHERE Id = ?",
+                    (1 if purchased else 0, ticket_id),
+                )
+                return int(cur.rowcount or 0) > 0
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower() or attempt == 4:
+                raise
+            time.sleep(0.2 * (attempt + 1))
+    return False
 
 
 def get_tickets(lotto_type: str, draw_date: str) -> list[dict]:

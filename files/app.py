@@ -8,6 +8,7 @@ Background scraper fills missing draws; never blocks rendering.
 import logging
 import os
 import re
+import sqlite3
 import sys
 import threading
 import requests
@@ -1324,6 +1325,12 @@ def api_tickets_permutations():
             saved += 1
 
         return jsonify({"saved": saved, "invalid": invalid, "duplicates": duplicates}), 201
+    except sqlite3.OperationalError as exc:
+        if "locked" in str(exc).lower():
+            logger.warning("Ticket permutation save hit a locked database")
+            return jsonify({"error": "Could not generate tickets on the server: database is busy. Please try again in a moment."}), 503
+        logger.exception("Could not generate ticket permutations")
+        return jsonify({"error": f"Could not generate tickets on the server: {exc}"}), 500
     except Exception as exc:
         logger.exception("Could not generate ticket permutations")
         return jsonify({"error": f"Could not generate tickets on the server: {exc}"}), 500

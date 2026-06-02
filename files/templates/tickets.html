@@ -912,6 +912,21 @@ function countTicketPermutations(buckets) {
   return buckets.reduce((total, bucket) => total * bucket.length, 1);
 }
 
+function summarizeApiFailure(status, responseText, fallbackMessage) {
+  const plainText = (responseText || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (status >= 500) {
+    return "The server is temporarily unavailable. Please try again in a moment.";
+  }
+  if (!plainText) {
+    return fallbackMessage;
+  }
+  return plainText.slice(0, 180);
+}
+
 function removeSelectedBucketValue(setIndex) {
   const list = document.getElementById(`p${setIndex}`);
   Array.from(list.selectedOptions).forEach(option => option.remove());
@@ -1145,8 +1160,11 @@ async function savePermutations() {
     try {
       data = responseText ? JSON.parse(responseText) : {};
     } catch {
-      const plainText = responseText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-      throw new Error(`Server returned ${r.status}: ${plainText.slice(0, 180) || "non-JSON response"}`);
+      throw new Error(summarizeApiFailure(
+        r.status,
+        responseText,
+        `Could not generate tickets (${r.status}).`
+      ));
     }
     if (!r.ok) {
       error.textContent = data.error || `Could not generate tickets (${r.status}).`;
@@ -1216,8 +1234,11 @@ async function saveActualDraw() {
     try {
       data = responseText ? JSON.parse(responseText) : {};
     } catch {
-      const plainText = responseText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-      throw new Error(`Server returned ${r.status}: ${plainText.slice(0, 180) || "non-JSON response"}`);
+      throw new Error(summarizeApiFailure(
+        r.status,
+        responseText,
+        "Could not save the winning numbers."
+      ));
     }
     if (!r.ok) {
       error.textContent = data.error || "Could not save the winning numbers.";

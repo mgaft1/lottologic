@@ -263,6 +263,19 @@ input::placeholder {
   gap: 12px;
   margin-bottom: 12px;
 }
+.section-head-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.section-count {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #4f5b66;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
 .ball-row {
   display: flex;
   gap: 6px;
@@ -655,7 +668,10 @@ td {
 
   <div class="panel">
     <div class="section-head">
-      <div class="section-title">Saved Tickets</div>
+      <div class="section-head-left">
+        <div class="section-title">Saved Tickets</div>
+        <div class="section-count" id="saved-ticket-count">Created: 0</div>
+      </div>
       <button class="btn btn-secondary hidden" id="btn-delete-optional">Delete All</button>
     </div>
     <table>
@@ -984,6 +1000,7 @@ function renderTickets(data) {
   winnersBody.innerHTML = "";
 
   document.getElementById("sum-count").textContent = String(data.tickets.length);
+  document.getElementById("saved-ticket-count").textContent = `Created: ${data.tickets.length}`;
   document.getElementById("sum-spent").textContent = formatMoney(data.total_spent);
   document.getElementById("sum-won").textContent = formatMoney(data.total_won);
   document.getElementById("sum-net").textContent = formatMoney((data.total_won || 0) - (data.total_spent || 0));

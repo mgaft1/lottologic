@@ -551,9 +551,7 @@ def run_scrape_pass(current_year_only: bool = False) -> dict:
 
     if current_year_only:
         # Fast pass: current year/month only
-        _run('CA', lambda: _scrape_year_only(
-            'CA', 'https://www.lottery.net/california/superlotto-plus/numbers/',
-            parse_lottery_net_ca, db.get_existing_dates('CA')))
+        _run('CA', lambda: _scrape_ca_year_only(db.get_existing_dates('CA')))
         _stagger('MM')
         _run('MM', lambda: _scrape_year_only(
             'MM', 'https://www.lottery.net/mega-millions/numbers/',
@@ -589,6 +587,23 @@ def _scrape_year_only(lotto_type: str, base: str, parser, existing: set[str]) ->
     for d in draws:
         if d['draw_date'] not in existing:
             if db.insert_draw(lotto_type, d['draw_date'],
+                              d['n1'], d['n2'], d['n3'], d['n4'], d['n5'], d['n6']):
+                inserted += 1
+                existing.add(d['draw_date'])
+    return inserted
+
+
+def _scrape_ca_year_only(existing: set[str]) -> int:
+    year = datetime.now().year
+    draws = _fetch_ca_year_draws(
+        year,
+        'https://www.lottery.net/california/superlotto-plus/numbers/',
+        'https://california.lottonumbers.com/superlotto-plus/past-numbers/',
+    )
+    inserted = 0
+    for d in draws:
+        if d['draw_date'] not in existing:
+            if db.insert_draw('CA', d['draw_date'],
                               d['n1'], d['n2'], d['n3'], d['n4'], d['n5'], d['n6']):
                 inserted += 1
                 existing.add(d['draw_date'])

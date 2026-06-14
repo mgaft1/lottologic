@@ -310,7 +310,7 @@ def ensure_lotto_draws_current(lotto_type: str) -> None:
     recent completed scheduled draw for this lotto type, attempt a targeted
     refresh before serving data.
     """
-    if _is_render_runtime() and not _env_flag("LOTTO_RENDER_REQUEST_REFRESH", False):
+    if _is_render_runtime() and not _env_flag("LOTTO_RENDER_REQUEST_REFRESH", True):
         return
 
     now_local = _now_local()

@@ -92,9 +92,11 @@ def parse_lottery_net_ca(html: str) -> list[dict]:
         soup,
         href_pattern=r'/california/superlotto-plus/numbers/\d{2}-\d{2}-\d{4}$',
     )
-    if draws:
-        return draws
-    return _parse_lottery_net_ca_text(soup)
+    text_draws = _parse_lottery_net_ca_text(soup)
+    merged: dict[str, dict] = {d["draw_date"]: d for d in draws}
+    for d in text_draws:
+        merged.setdefault(d["draw_date"], d)
+    return sorted(merged.values(), key=lambda row: row["draw_date"])
 
 
 def _parse_lottery_net_ca_text(soup: BeautifulSoup) -> list[dict]:

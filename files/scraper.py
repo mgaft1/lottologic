@@ -59,6 +59,9 @@ BROWSER_HEADERS = {
     ),
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
 }
 
 
@@ -67,16 +70,31 @@ def _is_render_runtime() -> bool:
 
 
 # ── HTTP fetch ───────────────────────────────────────────
+def _looks_like_html(text: str) -> bool:
+    sample = (text or "")[:512].lower()
+    return "<html" in sample or "<!doctype html" in sample
+
+
 def _fetch(url: str) -> Optional[str]:
-    try:
-        resp = requests.get(url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT)
-        if resp.status_code == 404:
-            return None
-        resp.raise_for_status()
-        return resp.text
-    except Exception as exc:
-        logger.warning("Fetch failed %s: %s", url, exc)
-        return None
+    last_encoding = None
+    last_error = None
+    for attempt in range(1, 5):
+        try:
+            resp = requests.get(url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT)
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            last_encoding = resp.headers.get("content-encoding")
+            text = resp.text
+            if _looks_like_html(text):
+                return text
+            last_error = f"non-html response (encoding={last_encoding}, len={len(text)})"
+            logger.warning("Fetch retry %s/%s for %s: %s", attempt, 4, url, last_error)
+        except Exception as exc:
+            last_error = str(exc)
+            logger.warning("Fetch attempt %s/%s failed %s: %s", attempt, 4, url, exc)
+    logger.warning("Fetch failed %s after retries: %s", url, last_error or last_encoding or "unknown error")
+    return None
 
 
 # ── Parsers ──────────────────────────────────────────────

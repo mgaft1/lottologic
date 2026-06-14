@@ -364,6 +364,15 @@ def ensure_lotto_draws_current(lotto_type: str) -> None:
         finally:
             lock.release()
 
+    if _is_render_runtime():
+        # Render requests should see freshly inserted draws immediately when a
+        # stale DB is detected, especially for lotto types that update close to
+        # the user's viewing time. Run the targeted refresh inline so the same
+        # request can render the repaired data instead of relying on a later
+        # retry window.
+        _refresh_job()
+        return
+
     threading.Thread(
         target=_refresh_job,
         name=f"viewer-refresh-{lotto_type.lower()}",

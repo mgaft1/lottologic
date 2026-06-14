@@ -424,7 +424,66 @@ def parse_powerball_previous_results(html: str, game_code: str) -> list[dict]:
         })
         seen_dates.add(draw_date)
 
-    return draws
+    text_draws = _parse_powerball_previous_results_text(soup, game_code)
+    merged: dict[str, dict] = {d["draw_date"]: d for d in draws}
+    for d in text_draws:
+        merged.setdefault(d["draw_date"], d)
+    return sorted(merged.values(), key=lambda row: row["draw_date"])
+
+
+def _parse_powerball_previous_results_text(soup: BeautifulSoup, game_code: str) -> list[dict]:
+    """
+    Fallback parser for official Powerball previous-results pages.
+
+    The visible page text lists each draw in a stable compact form even when the
+    anchor href structure shifts or is omitted from server-rendered HTML.
+    """
+    page_text = " ".join(soup.stripped_strings)
+    page_text = re.sub(r"\s+", " ", page_text)
+    results = []
+    seen_dates = set()
+
+    record_re = re.compile(
+        r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+"
+        r"([A-Z][a-z]{2})\s+(\d{1,2}),\s+(\d{4})\s+"
+        r"(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})"
+    )
+    month_map = {
+        "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+        "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+    }
+
+    for match in record_re.finditer(page_text):
+        month_name = match.group(2)
+        month = month_map.get(month_name)
+        if not month:
+            continue
+
+        day = int(match.group(3))
+        year = int(match.group(4))
+        draw_date = datetime(year, month, day).strftime("%Y-%m-%d")
+        if draw_date in seen_dates:
+            continue
+
+        balls = [int(match.group(i)) for i in range(5, 11)]
+        if len(balls) != 6:
+            continue
+
+        # Official Powerball "previous results" pages are already filtered by
+        # game via the gc query parameter, so the same text parser works for
+        # both Powerball and Double Play.
+        results.append({
+            "draw_date": draw_date,
+            "n1": balls[0],
+            "n2": balls[1],
+            "n3": balls[2],
+            "n4": balls[3],
+            "n5": balls[4],
+            "n6": balls[5],
+        })
+        seen_dates.add(draw_date)
+
+    return results
 
 
 def get_colorado_month_urls(html: str) -> list[str]:

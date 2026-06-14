@@ -341,6 +341,30 @@ def parse_lottonumbers_fl(html: str) -> list[dict]:
     return results
 
 
+def _fetch_fl_draws(year: int) -> list[dict]:
+    """
+    Florida Lotto can surface fresher results on the rolling "past-numbers"
+    page before the yearly archive fully catches up. Merge both sources so the
+    current year does not lag behind recent draws.
+    """
+    sources = [
+        ("year", f"https://www.lottonumbers.com/florida-lotto/numbers/{year}"),
+        ("recent", "https://www.lottonumbers.com/florida-lotto/past-numbers"),
+    ]
+    merged: dict[str, dict] = {}
+    for label, url in sources:
+        html = _fetch(url)
+        draws = parse_lottonumbers_fl(html) if html else []
+        if not draws:
+            logger.info("FL %s source returned no draws", label)
+            continue
+        logger.info("FL %s source returned %d draw(s)", label, len(draws))
+        for draw in draws:
+            if draw["draw_date"].startswith(f"{year}-"):
+                merged.setdefault(draw["draw_date"], draw)
+    return sorted(merged.values(), key=lambda row: row["draw_date"])
+
+
 def parse_colorado_pb_pd(html: str) -> tuple[list[dict], list[dict]]:
     """
     coloradolottery.com Powerball + Double Play month page.
@@ -560,15 +584,13 @@ def _scrape_mm(existing: set[str]) -> int:
 
 
 def _scrape_fl(existing: set[str]) -> int:
-    base  = 'https://www.lottonumbers.com/florida-lotto/numbers/'
     start = 1988
     inserted = 0
     for year in range(start, datetime.now().year + 1):
-        html = _fetch(f'{base}{year}')
-        if not html:
+        draws = _fetch_fl_draws(year)
+        if not draws:
             time.sleep(THROTTLE_SECS)
             continue
-        draws = parse_lottonumbers_fl(html)
         for d in draws:
             if d['draw_date'] not in existing:
                 if db.insert_draw('FL', d['draw_date'],
@@ -697,9 +719,7 @@ def run_scrape_pass(current_year_only: bool = False) -> dict:
             'MM', 'https://www.lottery.net/mega-millions/numbers/',
             parse_lottery_net_mm, db.get_existing_dates('MM')))
         _stagger('FL')
-        _run('FL', lambda: _scrape_year_only(
-            'FL', 'https://www.lottonumbers.com/florida-lotto/numbers/',
-            parse_lottonumbers_fl, db.get_existing_dates('FL')))
+        _run('FL', lambda: _scrape_fl_year_only(db.get_existing_dates('FL')))
         _stagger('PB/PD')
         _run('PB_PD', _scrape_pb_pd,
              db.get_existing_dates('PB'), db.get_existing_dates('PD'))
@@ -727,6 +747,19 @@ def _scrape_year_only(lotto_type: str, base: str, parser, existing: set[str]) ->
     for d in draws:
         if d['draw_date'] not in existing:
             if db.insert_draw(lotto_type, d['draw_date'],
+                              d['n1'], d['n2'], d['n3'], d['n4'], d['n5'], d['n6']):
+                inserted += 1
+                existing.add(d['draw_date'])
+    return inserted
+
+
+def _scrape_fl_year_only(existing: set[str]) -> int:
+    year = datetime.now().year
+    draws = _fetch_fl_draws(year)
+    inserted = 0
+    for d in draws:
+        if d['draw_date'] not in existing:
+            if db.insert_draw('FL', d['draw_date'],
                               d['n1'], d['n2'], d['n3'], d['n4'], d['n5'], d['n6']):
                 inserted += 1
                 existing.add(d['draw_date'])
@@ -833,12 +866,7 @@ def refresh_lotto_type(lotto_type: str) -> dict[str, int]:
         return {"MM": inserted}
 
     if lotto_type == "FL":
-        inserted = _scrape_year_only(
-            "FL",
-            "https://www.lottonumbers.com/florida-lotto/numbers/",
-            parse_lottonumbers_fl,
-            db.get_existing_dates("FL"),
-        )
+        inserted = _scrape_fl_year_only(db.get_existing_dates("FL"))
         return {"FL": inserted}
 
     if lotto_type in {"PB", "PD"}:

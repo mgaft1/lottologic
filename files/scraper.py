@@ -229,10 +229,74 @@ def parse_lottery_net_mm(html: str) -> list[dict]:
     Balls: li.ball x5 (sorted), li.mega-ball = bonus.
     """
     soup = BeautifulSoup(html, 'lxml')
-    return _parse_lottery_net_draws(
+    draws = _parse_lottery_net_draws(
         soup,
         href_pattern=r'/mega-millions/numbers/\d{2}-\d{2}-\d{4}$',
     )
+    text_draws = _parse_lottery_net_mm_text(soup)
+    merged: dict[str, dict] = {d["draw_date"]: d for d in draws}
+    for d in text_draws:
+        merged.setdefault(d["draw_date"], d)
+    return sorted(merged.values(), key=lambda row: row["draw_date"])
+
+
+def _parse_lottery_net_mm_text(soup: BeautifulSoup) -> list[dict]:
+    """
+    Fallback parser for Lottery.net Mega Millions pages when the result-card
+    markup shifts but the rendered text still lists the draw date followed by
+    six numbers.
+    """
+    lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
+    results = []
+    seen_dates = set()
+    i = 0
+    date_patterns = (
+        "%A %B %d, %Y",
+        "%a %B %d, %Y",
+        "%A, %B %d, %Y",
+        "%a, %B %d, %Y",
+    )
+
+    while i < len(lines):
+        raw_date = lines[i]
+        draw_date = None
+        for pattern in date_patterns:
+            try:
+                draw_date = datetime.strptime(raw_date, pattern).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                continue
+        if not draw_date:
+            i += 1
+            continue
+        if draw_date in seen_dates:
+            i += 1
+            continue
+
+        nums = []
+        j = i + 1
+        while j < len(lines) and len(nums) < 6:
+            candidate = lines[j]
+            if re.fullmatch(r"\d{1,2}", candidate):
+                nums.append(int(candidate))
+            elif nums and not re.fullmatch(r"\d{4}", candidate):
+                break
+            j += 1
+
+        if len(nums) == 6:
+            main = sorted(nums[:5])
+            results.append({
+                'draw_date': draw_date,
+                'n1': main[0], 'n2': main[1], 'n3': main[2],
+                'n4': main[3], 'n5': main[4], 'n6': nums[5],
+            })
+            seen_dates.add(draw_date)
+            i = j
+            continue
+
+        i += 1
+
+    return results
 
 
 def _parse_lottery_net_draws(soup: BeautifulSoup, href_pattern: str) -> list[dict]:

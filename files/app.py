@@ -164,6 +164,7 @@ APP_TIMEZONE = _resolve_app_timezone()
 TICKET_CUTOFF_TIME = time(19, 45)
 DRAW_RESULTS_READY_TIME = time(21, 30)
 VIEWER_REFRESH_RETRY_WINDOW = timedelta(minutes=10)
+VIEWER_REFRESH_WAIT_SECS = float(os.environ.get("LOTTO_VIEWER_REFRESH_WAIT_SECS", "6"))
 _viewer_refresh_attempts: dict[str, datetime] = {}
 _viewer_refresh_state_lock = threading.Lock()
 _viewer_refresh_locks = {lt: threading.Lock() for lt in LOTTO_LABELS}
@@ -365,12 +366,16 @@ def ensure_lotto_draws_current(lotto_type: str) -> None:
             lock.release()
 
     if _is_render_runtime():
-        # Render requests should see freshly inserted draws immediately when a
-        # stale DB is detected, especially for lotto types that update close to
-        # the user's viewing time. Run the targeted refresh inline so the same
-        # request can render the repaired data instead of relying on a later
-        # retry window.
-        _refresh_job()
+        # Keep the page responsive on Render even when upstream sources are
+        # slow. Start the targeted refresh right away, but only wait a short,
+        # bounded amount of time before serving the current page.
+        worker = threading.Thread(
+            target=_refresh_job,
+            name=f"viewer-refresh-{lotto_type.lower()}",
+            daemon=True,
+        )
+        worker.start()
+        worker.join(timeout=VIEWER_REFRESH_WAIT_SECS)
         return
 
     threading.Thread(

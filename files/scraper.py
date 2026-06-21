@@ -306,6 +306,16 @@ def parse_calottery_ca_latest(html: str) -> list[dict]:
     }]
 
 
+def _fetch_ca_latest_draws() -> list[dict]:
+    html = _fetch('https://www.calottery.com/en/draw-games/superlotto-plus')
+    draws = parse_calottery_ca_latest(html) if html else []
+    if draws:
+        logger.info("CA official latest source succeeded")
+    else:
+        logger.info("CA official latest source returned no draws")
+    return draws
+
+
 def parse_lottery_net_mm(html: str) -> list[dict]:
     """
     lottery.net Mega Millions year page.
@@ -991,14 +1001,16 @@ def refresh_lotto_type(lotto_type: str) -> dict[str, int]:
     lotto_type = lotto_type.upper()
 
     if lotto_type == "CA":
-        year = datetime.now().year
-        draws = _fetch_ca_year_draws(
-            year,
-            "https://www.lottery.net/california/superlotto-plus/numbers/",
-            "https://california.lottonumbers.com/superlotto-plus/past-numbers/",
-        )
         inserted = 0
         existing = db.get_existing_dates("CA")
+        draws = _fetch_ca_latest_draws()
+        if not draws:
+            year = datetime.now().year
+            draws = _fetch_ca_year_draws(
+                year,
+                "https://www.lottery.net/california/superlotto-plus/numbers/",
+                "https://california.lottonumbers.com/superlotto-plus/past-numbers/",
+            )
         for d in draws:
             if d["draw_date"] not in existing:
                 if db.insert_draw("CA", d["draw_date"], d["n1"], d["n2"], d["n3"], d["n4"], d["n5"], d["n6"]):

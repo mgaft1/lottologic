@@ -899,8 +899,6 @@ def _fetch_ca_year_draws(year: int, primary_base: str, fallback_base: str) -> li
         ("primary", f'{primary_base}{year}', parse_lottery_net_ca),
         ("fallback", f'{fallback_base}{year}', parse_lottonumbers_ca),
     ]
-    if _is_render_runtime():
-        sources.reverse()
 
     for label, url, parser in sources:
         html = _fetch(url)

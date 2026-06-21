@@ -526,13 +526,13 @@ def _fetch_fl_draws(year: int) -> list[dict]:
 
 def _fetch_fl_latest_draws(year: int) -> list[dict]:
     """
-    Request-time Florida stale repair: prefer the current-year archive first
-    because it already carries the newest June 2026 draws, then fall back to
-    the rolling recent page if needed.
+    Request-time Florida stale repair: prefer the rolling recent page first
+    because it covers the last six months and can satisfy stale-repair needs
+    without waiting on the heavier year archive when that host is slow.
     """
     sources = [
-        ("year", f"https://www.lottonumbers.com/florida-lotto/numbers/{year}"),
         ("recent", "https://www.lottonumbers.com/florida-lotto/past-numbers"),
+        ("year", f"https://www.lottonumbers.com/florida-lotto/numbers/{year}"),
     ]
     for label, url in sources:
         html = _fetch(url)

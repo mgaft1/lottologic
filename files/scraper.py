@@ -34,10 +34,12 @@ import os
 import re
 import threading
 import time
+from urllib.parse import urlparse
 from datetime import datetime
 from typing import Optional
 
 import requests
+import urllib3
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
@@ -46,7 +48,7 @@ import db
 logger = logging.getLogger(__name__)
 
 # ── Config ──────────────────────────────────────────────
-REQUEST_TIMEOUT  = int(os.environ.get("LOTTO_REQUEST_TIMEOUT_SECS", "8"))
+REQUEST_TIMEOUT  = int(os.environ.get("LOTTO_REQUEST_TIMEOUT_SECS", "20"))
 THROTTLE_SECS    = 2
 SCRAPE_INTERVAL  = 6 * 3600   # seconds between full history passes
 STAGGER_SECS     = 3           # delay between each lotto type scrape (3 seconds)
@@ -62,7 +64,18 @@ BROWSER_HEADERS = {
     'Accept-Encoding': 'gzip, deflate',
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache',
+    'Connection': 'close',
 }
+
+INSECURE_SSL_FETCH_HOSTS = {
+    "www.lottery.net",
+    "california.lottonumbers.com",
+    "www.powerball.com",
+    "www.coloradolottery.com",
+    "www.lottonumbers.com",
+}
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def _is_render_runtime() -> bool:
@@ -75,12 +88,28 @@ def _looks_like_html(text: str) -> bool:
     return "<html" in sample or "<!doctype html" in sample
 
 
+def _allow_insecure_ssl(url: str) -> bool:
+    return urlparse(url).hostname in INSECURE_SSL_FETCH_HOSTS
+
+
 def _fetch(url: str) -> Optional[str]:
     last_encoding = None
     last_error = None
-    for attempt in range(1, 5):
+    insecure_allowed = _allow_insecure_ssl(url)
+    attempt_plan = [
+        (True, REQUEST_TIMEOUT),
+        (False, max(REQUEST_TIMEOUT, 20)) if insecure_allowed else (True, REQUEST_TIMEOUT),
+        (False, max(REQUEST_TIMEOUT, 20)) if insecure_allowed else (True, REQUEST_TIMEOUT),
+        (False, max(REQUEST_TIMEOUT, 20)) if insecure_allowed else (True, REQUEST_TIMEOUT),
+    ]
+    for attempt, (verify_ssl, timeout_secs) in enumerate(attempt_plan, start=1):
         try:
-            resp = requests.get(url, headers=BROWSER_HEADERS, timeout=REQUEST_TIMEOUT)
+            resp = requests.get(
+                url,
+                headers=BROWSER_HEADERS,
+                timeout=timeout_secs,
+                verify=verify_ssl,
+            )
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()
@@ -89,10 +118,26 @@ def _fetch(url: str) -> Optional[str]:
             if _looks_like_html(text):
                 return text
             last_error = f"non-html response (encoding={last_encoding}, len={len(text)})"
-            logger.warning("Fetch retry %s/%s for %s: %s", attempt, 4, url, last_error)
+            logger.warning(
+                "Fetch retry %s/%s for %s: %s (verify_ssl=%s timeout=%ss)",
+                attempt,
+                len(attempt_plan),
+                url,
+                last_error,
+                verify_ssl,
+                timeout_secs,
+            )
         except Exception as exc:
             last_error = str(exc)
-            logger.warning("Fetch attempt %s/%s failed %s: %s", attempt, 4, url, exc)
+            logger.warning(
+                "Fetch attempt %s/%s failed %s: %s (verify_ssl=%s timeout=%ss)",
+                attempt,
+                len(attempt_plan),
+                url,
+                exc,
+                verify_ssl,
+                timeout_secs,
+            )
     logger.warning("Fetch failed %s after retries: %s", url, last_error or last_encoding or "unknown error")
     return None
 
@@ -665,20 +710,64 @@ def _scrape_fl(existing: set[str]) -> int:
     return inserted
 
 
-def _scrape_pb_pd(existing_pb: set[str], existing_pd: set[str]) -> tuple[int, int]:
+def _scrape_pb_pd(existing_pb: set[str], existing_pd: set[str], recent_only: bool = False) -> tuple[int, int]:
     """
-    Prefer official Powerball result pages for recent PB/PD results because
-    they are more stable on Render. Fall back to the older Colorado Lottery
-    month scraper if the official pages produce no parsable rows.
+    Prefer the Colorado Lottery month page first because it currently exposes
+    the newest PB/PD draws in server-rendered HTML more consistently than the
+    official Powerball results page. Fall back to the official pages if the
+    Colorado source produces no parsable rows.
     """
     inserted_pb = inserted_pd = 0
+
+    base_url   = 'https://www.coloradolottery.com/en/games/powerball/drawings/'
+    now        = datetime.now()
+    first_page = f'{base_url}{now.year}-{now.month:02d}/'
+    html = _fetch(first_page)
+    parsed_any = False
+    if html:
+        if recent_only:
+            month_urls = [first_page]
+        else:
+            month_urls = get_colorado_month_urls(html)
+            if not month_urls:
+                # Fallback: just use this month
+                month_urls = [first_page]
+
+        for url in month_urls:
+            page_html = html if url == first_page else _fetch(url)
+            if not page_html:
+                time.sleep(THROTTLE_SECS)
+                continue
+            pb_draws, pd_draws = parse_colorado_pb_pd(page_html)
+            if pb_draws or pd_draws:
+                parsed_any = True
+
+            for d in pb_draws:
+                if d['draw_date'] not in existing_pb:
+                    if db.insert_draw('PB', d['draw_date'],
+                                      d['n1'], d['n2'], d['n3'], d['n4'], d['n5'], d['n6']):
+                        inserted_pb += 1
+                        existing_pb.add(d['draw_date'])
+
+            for d in pd_draws:
+                if d['draw_date'] not in existing_pd:
+                    if db.insert_draw('PD', d['draw_date'],
+                                      d['n1'], d['n2'], d['n3'], d['n4'], d['n5'], d['n6']):
+                        inserted_pd += 1
+                        existing_pd.add(d['draw_date'])
+
+            time.sleep(THROTTLE_SECS)
+
+    if parsed_any:
+        return inserted_pb, inserted_pd
+
+    logger.warning("Colorado PB/PD source produced no rows; falling back to official Powerball pages.")
 
     official_sources = [
         ("PB", "https://www.powerball.com/previous-results", "powerball", existing_pb),
         ("PD", "https://www.powerball.com/previous-results?gc=pb-double-play", "pb-double-play", existing_pd),
     ]
 
-    parsed_any = False
     for lotto_type, url, game_code, existing in official_sources:
         html = _fetch(url)
         if not html:
@@ -687,8 +776,6 @@ def _scrape_pb_pd(existing_pb: set[str], existing_pd: set[str]) -> tuple[int, in
 
         draws = parse_powerball_previous_results(html, game_code)
         logger.info("%s official previous-results parsed %d draw(s)", lotto_type, len(draws))
-        if draws:
-            parsed_any = True
 
         for d in draws:
             if d["draw_date"] in existing:
@@ -703,46 +790,6 @@ def _scrape_pb_pd(existing_pb: set[str], existing_pd: set[str]) -> tuple[int, in
                 else:
                     inserted_pd += 1
                 existing.add(d["draw_date"])
-
-    if parsed_any:
-        return inserted_pb, inserted_pd
-
-    logger.warning("Official PB/PD source produced no rows; falling back to Colorado Lottery source.")
-
-    base_url   = 'https://www.coloradolottery.com/en/games/powerball/drawings/'
-    now        = datetime.now()
-    first_page = f'{base_url}{now.year}-{now.month:02d}/'
-    html = _fetch(first_page)
-    if not html:
-        return inserted_pb, inserted_pd
-
-    month_urls = get_colorado_month_urls(html)
-    if not month_urls:
-        # Fallback: just use this month
-        month_urls = [first_page]
-
-    for url in month_urls:
-        page_html = html if url == first_page else _fetch(url)
-        if not page_html:
-            time.sleep(THROTTLE_SECS)
-            continue
-        pb_draws, pd_draws = parse_colorado_pb_pd(page_html)
-
-        for d in pb_draws:
-            if d['draw_date'] not in existing_pb:
-                if db.insert_draw('PB', d['draw_date'],
-                                  d['n1'], d['n2'], d['n3'], d['n4'], d['n5'], d['n6']):
-                    inserted_pb += 1
-                    existing_pb.add(d['draw_date'])
-
-        for d in pd_draws:
-            if d['draw_date'] not in existing_pd:
-                if db.insert_draw('PD', d['draw_date'],
-                                  d['n1'], d['n2'], d['n3'], d['n4'], d['n5'], d['n6']):
-                    inserted_pd += 1
-                    existing_pd.add(d['draw_date'])
-
-        time.sleep(THROTTLE_SECS)
 
     return inserted_pb, inserted_pd
 
@@ -786,7 +833,7 @@ def run_scrape_pass(current_year_only: bool = False) -> dict:
         _run('FL', lambda: _scrape_fl_year_only(db.get_existing_dates('FL')))
         _stagger('PB/PD')
         _run('PB_PD', _scrape_pb_pd,
-             db.get_existing_dates('PB'), db.get_existing_dates('PD'))
+             db.get_existing_dates('PB'), db.get_existing_dates('PD'), True)
     else:
         _run('CA', _scrape_ca, db.get_existing_dates('CA'))
         _stagger('MM')
@@ -937,6 +984,7 @@ def refresh_lotto_type(lotto_type: str) -> dict[str, int]:
         pb_inserted, pd_inserted = _scrape_pb_pd(
             db.get_existing_dates("PB"),
             db.get_existing_dates("PD"),
+            recent_only=True,
         )
         return {"PB": pb_inserted, "PD": pd_inserted}
 

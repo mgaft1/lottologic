@@ -104,12 +104,14 @@ def _fetch(url: str) -> Optional[str]:
     ]
     for attempt, (verify_ssl, timeout_secs) in enumerate(attempt_plan, start=1):
         try:
-            resp = requests.get(
-                url,
-                headers=BROWSER_HEADERS,
-                timeout=timeout_secs,
-                verify=verify_ssl,
-            )
+            with requests.Session() as session:
+                session.trust_env = False
+                session.headers.update(BROWSER_HEADERS)
+                resp = session.get(
+                    url,
+                    timeout=timeout_secs,
+                    verify=verify_ssl,
+                )
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()

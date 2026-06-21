@@ -524,6 +524,29 @@ def _fetch_fl_draws(year: int) -> list[dict]:
     return sorted(merged.values(), key=lambda row: row["draw_date"])
 
 
+def _fetch_fl_latest_draws(year: int) -> list[dict]:
+    """
+    Request-time Florida stale repair: prefer the current-year archive first
+    because it already carries the newest June 2026 draws, then fall back to
+    the rolling recent page if needed.
+    """
+    sources = [
+        ("year", f"https://www.lottonumbers.com/florida-lotto/numbers/{year}"),
+        ("recent", "https://www.lottonumbers.com/florida-lotto/past-numbers"),
+    ]
+    for label, url in sources:
+        html = _fetch(url)
+        draws = parse_lottonumbers_fl(html) if html else []
+        if not draws:
+            logger.info("FL %s latest source returned no draws", label)
+            continue
+        filtered = [draw for draw in draws if draw["draw_date"].startswith(f"{year}-")]
+        if filtered:
+            logger.info("FL %s latest source succeeded with %d draw(s)", label, len(filtered))
+            return sorted(filtered, key=lambda row: row["draw_date"])
+    return []
+
+
 def parse_colorado_pb_pd(html: str) -> tuple[list[dict], list[dict]]:
     """
     coloradolottery.com Powerball + Double Play month page.
@@ -1028,7 +1051,18 @@ def refresh_lotto_type(lotto_type: str) -> dict[str, int]:
         return {"MM": inserted}
 
     if lotto_type == "FL":
-        inserted = _scrape_fl_year_only(db.get_existing_dates("FL"))
+        year = datetime.now().year
+        draws = _fetch_fl_latest_draws(year)
+        inserted = 0
+        existing = db.get_existing_dates("FL")
+        if not draws:
+            draws = _fetch_fl_draws(year)
+        for d in draws:
+            if d['draw_date'] not in existing:
+                if db.insert_draw('FL', d['draw_date'],
+                                  d['n1'], d['n2'], d['n3'], d['n4'], d['n5'], d['n6']):
+                    inserted += 1
+                    existing.add(d['draw_date'])
         return {"FL": inserted}
 
     if lotto_type in {"PB", "PD"}:

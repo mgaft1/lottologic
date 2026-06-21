@@ -70,6 +70,8 @@ BROWSER_HEADERS = {
 INSECURE_SSL_FETCH_HOSTS = {
     "www.lottery.net",
     "california.lottonumbers.com",
+    "calottery.com",
+    "www.calottery.com",
     "www.powerball.com",
     "www.coloradolottery.com",
     "www.lottonumbers.com",
@@ -266,6 +268,42 @@ def parse_lottonumbers_ca(html: str) -> list[dict]:
         i += 1
 
     return results
+
+
+def parse_calottery_ca_latest(html: str) -> list[dict]:
+    """
+    Official California Lottery SuperLotto Plus page.
+
+    This page reliably includes the latest draw as a server-rendered card with
+    a date like `SAT/JUN 20, 2026` and six winning-number spans.
+    """
+    soup = BeautifulSoup(html, 'lxml')
+    date_el = soup.select_one('p.draw-cards--draw-date strong')
+    if not date_el:
+        return []
+
+    raw_date = " ".join(date_el.stripped_strings).strip().upper()
+    raw_date = re.sub(r'^[A-Z]{3}/', '', raw_date)
+    try:
+        draw_date = datetime.strptime(raw_date, "%b %d, %Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return []
+
+    nums = []
+    for span in soup.select('span.draw-cards--winning-numbers-inner-wrapper'):
+        text = span.get_text(strip=True)
+        if text.isdigit():
+            nums.append(int(text))
+
+    if len(nums) != 6:
+        return []
+
+    main = sorted(nums[:5])
+    return [{
+        'draw_date': draw_date,
+        'n1': main[0], 'n2': main[1], 'n3': main[2],
+        'n4': main[3], 'n5': main[4], 'n6': nums[5],
+    }]
 
 
 def parse_lottery_net_mm(html: str) -> list[dict]:
@@ -900,14 +938,15 @@ def _fetch_ca_year_draws(year: int, primary_base: str, fallback_base: str) -> li
     sources = [
         ("primary", f'{primary_base}{year}', parse_lottery_net_ca),
         ("fallback", f'{fallback_base}{year}', parse_lottonumbers_ca),
+        ("official-latest", 'https://www.calottery.com/en/draw-games/superlotto-plus', parse_calottery_ca_latest),
     ]
 
     for label, url, parser in sources:
         html = _fetch(url)
         draws = parser(html) if html else []
         if draws:
-            if label == "fallback":
-                logger.info("CA fallback source succeeded for %s", year)
+            if label != "primary":
+                logger.info("CA %s source succeeded for %s", label, year)
             return draws
         logger.info("CA %s source returned no draws for %s", label, year)
 

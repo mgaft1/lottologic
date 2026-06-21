@@ -360,7 +360,22 @@ def ensure_lotto_draws_current(lotto_type: str) -> None:
                 refresh_targets = ["PB", "PD"]
             for target in refresh_targets:
                 _refresh_forecasts_for_lotto(target)
+
+            _, latest_str_after = db.get_date_bounds(lotto_type)
+            latest_after = date.fromisoformat(latest_str_after) if latest_str_after else None
+            if latest_after and latest_after >= expected_latest:
+                with _viewer_refresh_state_lock:
+                    _viewer_refresh_attempts[lotto_type] = _now_local()
+            else:
+                with _viewer_refresh_state_lock:
+                    _viewer_refresh_attempts.pop(lotto_type, None)
+                logger.info(
+                    "%s stale-data refresh did not reach expected latest draw; allowing quick retry",
+                    lotto_type,
+                )
         except Exception as exc:
+            with _viewer_refresh_state_lock:
+                _viewer_refresh_attempts.pop(lotto_type, None)
             logger.warning("%s on-demand viewer refresh failed: %s", lotto_type, exc)
         finally:
             lock.release()

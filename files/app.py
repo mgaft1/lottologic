@@ -163,8 +163,8 @@ def _resolve_app_timezone():
 APP_TIMEZONE = _resolve_app_timezone()
 TICKET_CUTOFF_TIME = time(19, 45)
 DRAW_RESULTS_READY_TIME = time(21, 30)
-VIEWER_REFRESH_RETRY_WINDOW = timedelta(minutes=10)
-VIEWER_REFRESH_WAIT_SECS = float(os.environ.get("LOTTO_VIEWER_REFRESH_WAIT_SECS", "6"))
+VIEWER_REFRESH_RETRY_WINDOW = timedelta(minutes=5)
+VIEWER_REFRESH_WAIT_SECS = float(os.environ.get("LOTTO_VIEWER_REFRESH_WAIT_SECS", "20"))
 _viewer_refresh_attempts: dict[str, datetime] = {}
 _viewer_refresh_state_lock = threading.Lock()
 _viewer_refresh_locks = {lt: threading.Lock() for lt in LOTTO_LABELS}

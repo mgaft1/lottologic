@@ -335,6 +335,83 @@ def parse_lottery_net_mm(html: str) -> list[dict]:
     return sorted(merged.values(), key=lambda row: row["draw_date"])
 
 
+def parse_lottonumbers_mm(html: str) -> list[dict]:
+    """
+    lottonumbers.com Mega Millions archive pages.
+
+    The page text is stable: each draw begins with a date line like
+    "Fri, Jun 19 2026" followed by six numeric result lines
+    (five main numbers + Mega Ball).
+    """
+    soup = BeautifulSoup(html, 'lxml')
+    lines = [line.strip() for line in soup.get_text("\n").splitlines() if line.strip()]
+    results = []
+    seen_dates = set()
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        draw_date = None
+        for fmt in ("%a, %b %d %Y", "%A, %B %d %Y", "%a, %B %d %Y"):
+            try:
+                draw_date = datetime.strptime(line, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                continue
+
+        if not draw_date or draw_date in seen_dates:
+            i += 1
+            continue
+
+        nums = []
+        j = i + 1
+        while j < len(lines) and len(nums) < 6:
+            candidate = lines[j]
+            if re.fullmatch(r"\d{1,2}", candidate):
+                nums.append(int(candidate))
+            elif re.fullmatch(r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+[A-Z][a-z]{2}\s+\d{1,2}\s+\d{4}", candidate):
+                break
+            j += 1
+
+        if len(nums) == 6:
+            main = sorted(nums[:5])
+            results.append({
+                'draw_date': draw_date,
+                'n1': main[0], 'n2': main[1], 'n3': main[2],
+                'n4': main[3], 'n5': main[4], 'n6': nums[5],
+            })
+            seen_dates.add(draw_date)
+            i = j
+            continue
+
+        i += 1
+
+    return results
+
+
+def _fetch_mm_latest_draws(year: int) -> list[dict]:
+    """
+    Request-time Mega Millions stale repair: prefer a lighter latest-results
+    source before falling back to the yearly Lottery.net archive.
+    """
+    sources = [
+        ("recent", "https://www.lottonumbers.com/mega-millions/past-numbers", parse_lottonumbers_mm),
+        ("year", f"https://www.lottonumbers.com/mega-millions/numbers/{year}", parse_lottonumbers_mm),
+        ("lottery_net", f"https://www.lottery.net/mega-millions/numbers/{year}", parse_lottery_net_mm),
+    ]
+    for label, url, parser in sources:
+        html = _fetch(url)
+        draws = parser(html) if html else []
+        if not draws:
+            logger.info("MM %s latest source returned no draws", label)
+            continue
+        filtered = [draw for draw in draws if draw["draw_date"].startswith(f"{year}-")]
+        if filtered:
+            logger.info("MM %s latest source succeeded with %d draw(s)", label, len(filtered))
+            return sorted(filtered, key=lambda row: row["draw_date"])
+    return []
+
+
 def _parse_lottery_net_mm_text(soup: BeautifulSoup) -> list[dict]:
     """
     Fallback parser for Lottery.net Mega Millions pages when the result-card
@@ -1042,12 +1119,23 @@ def refresh_lotto_type(lotto_type: str) -> dict[str, int]:
         return {"CA": inserted}
 
     if lotto_type == "MM":
-        inserted = _scrape_year_only(
-            "MM",
-            "https://www.lottery.net/mega-millions/numbers/",
-            parse_lottery_net_mm,
-            db.get_existing_dates("MM"),
-        )
+        year = datetime.now().year
+        draws = _fetch_mm_latest_draws(year)
+        inserted = 0
+        existing = db.get_existing_dates("MM")
+        if not draws:
+            inserted = _scrape_year_only(
+                "MM",
+                "https://www.lottery.net/mega-millions/numbers/",
+                parse_lottery_net_mm,
+                existing,
+            )
+            return {"MM": inserted}
+        for d in draws:
+            if d["draw_date"] not in existing:
+                if db.insert_draw("MM", d["draw_date"], d["n1"], d["n2"], d["n3"], d["n4"], d["n5"], d["n6"]):
+                    inserted += 1
+                    existing.add(d["draw_date"])
         return {"MM": inserted}
 
     if lotto_type == "FL":

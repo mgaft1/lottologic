@@ -34,6 +34,7 @@ import os
 import re
 import threading
 import time
+import json
 from urllib.parse import urlparse
 from datetime import datetime
 from typing import Optional
@@ -72,6 +73,7 @@ INSECURE_SSL_FETCH_HOSTS = {
     "california.lottonumbers.com",
     "calottery.com",
     "www.calottery.com",
+    "www.megamillions.com",
     "www.powerball.com",
     "www.coloradolottery.com",
     "www.lottonumbers.com",
@@ -143,6 +145,49 @@ def _fetch(url: str) -> Optional[str]:
                 timeout_secs,
             )
     logger.warning("Fetch failed %s after retries: %s", url, last_error or last_encoding or "unknown error")
+    return None
+
+
+def _post_json(url: str, payload: str = "{}") -> Optional[dict]:
+    last_error = None
+    insecure_allowed = _allow_insecure_ssl(url)
+    attempt_plan = [
+        (True, REQUEST_TIMEOUT),
+        (False, max(REQUEST_TIMEOUT, 20)) if insecure_allowed else (True, REQUEST_TIMEOUT),
+        (False, max(REQUEST_TIMEOUT, 20)) if insecure_allowed else (True, REQUEST_TIMEOUT),
+        (False, max(REQUEST_TIMEOUT, 20)) if insecure_allowed else (True, REQUEST_TIMEOUT),
+    ]
+    headers = dict(BROWSER_HEADERS)
+    headers["Content-Type"] = "application/json; charset=utf-8"
+    headers["X-Requested-With"] = "XMLHttpRequest"
+
+    for attempt, (verify_ssl, timeout_secs) in enumerate(attempt_plan, start=1):
+        try:
+            with requests.Session() as session:
+                session.trust_env = False
+                session.headers.update(headers)
+                resp = session.post(
+                    url,
+                    data=payload,
+                    timeout=timeout_secs,
+                    verify=verify_ssl,
+                )
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "POST attempt %d/%d failed %s: %s (verify_ssl=%s timeout=%ss)",
+                attempt,
+                len(attempt_plan),
+                url,
+                exc,
+                verify_ssl,
+                timeout_secs,
+            )
+            time.sleep(min(THROTTLE_SECS, 1))
+
+    logger.warning("POST failed %s after retries: %s", url, last_error)
     return None
 
 
@@ -389,19 +434,59 @@ def parse_lottonumbers_mm(html: str) -> list[dict]:
     return results
 
 
+def _fetch_mm_official_latest_draws() -> list[dict]:
+    data = _post_json("https://www.megamillions.com/cmspages/utilservice.asmx/GetLatestDrawData")
+    if not data or "d" not in data:
+        logger.info("MM official latest source returned no payload")
+        return []
+    try:
+        payload = json.loads(data["d"]) if isinstance(data["d"], str) else data["d"]
+        drawing = payload.get("Drawing") or {}
+        play_date = drawing.get("PlayDate")
+        numbers = [
+            drawing.get("N1"),
+            drawing.get("N2"),
+            drawing.get("N3"),
+            drawing.get("N4"),
+            drawing.get("N5"),
+            drawing.get("MBall"),
+        ]
+        if not play_date or any(n is None for n in numbers):
+            logger.info("MM official latest source missing drawing fields")
+            return []
+        draw_date = datetime.fromisoformat(play_date).strftime("%Y-%m-%d")
+        main = sorted(int(n) for n in numbers[:5])
+        return [{
+            "draw_date": draw_date,
+            "n1": main[0],
+            "n2": main[1],
+            "n3": main[2],
+            "n4": main[3],
+            "n5": main[4],
+            "n6": int(numbers[5]),
+        }]
+    except Exception as exc:
+        logger.warning("MM official latest source parse failed: %s", exc)
+        return []
+
+
 def _fetch_mm_latest_draws(year: int) -> list[dict]:
     """
     Request-time Mega Millions stale repair: prefer a lighter latest-results
     source before falling back to the yearly Lottery.net archive.
     """
     sources = [
+        ("official", None, None),
         ("recent", "https://www.lottonumbers.com/mega-millions/past-numbers", parse_lottonumbers_mm),
         ("year", f"https://www.lottonumbers.com/mega-millions/numbers/{year}", parse_lottonumbers_mm),
         ("lottery_net", f"https://www.lottery.net/mega-millions/numbers/{year}", parse_lottery_net_mm),
     ]
     for label, url, parser in sources:
-        html = _fetch(url)
-        draws = parser(html) if html else []
+        if label == "official":
+            draws = _fetch_mm_official_latest_draws()
+        else:
+            html = _fetch(url)
+            draws = parser(html) if html else []
         if not draws:
             logger.info("MM %s latest source returned no draws", label)
             continue

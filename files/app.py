@@ -273,6 +273,31 @@ def latest_completed_draw_date(lotto_type: str, now_local: datetime | None = Non
     return candidate
 
 
+def _purge_invalid_manual_draws() -> int:
+    """
+    Manual winning-number overrides should only exist on scheduled draw days.
+    If an operator saves one on an impossible date, remove it during startup.
+    """
+    removed = 0
+    for row in db.get_manual_draw_overrides():
+        lotto_type = row["LottoType"]
+        draw_date = row["DrawDate"]
+        try:
+            draw_day = date.fromisoformat(draw_date)
+        except ValueError:
+            draw_day = None
+
+        if draw_day is None or not is_draw_day(lotto_type, draw_day):
+            if db.delete_draw(lotto_type, draw_date):
+                removed += 1
+                logger.warning(
+                    "Removed invalid manual draw override for %s on %s",
+                    lotto_type,
+                    draw_date,
+                )
+    return removed
+
+
 def _refresh_forecasts_for_lotto(lotto_type: str) -> None:
     from forecast import backfill_predictions
 
@@ -1380,9 +1405,13 @@ def api_manual_draw():
         if not draw_date:
             return jsonify({"error": "draw_date required"}), 400
         try:
-            date.fromisoformat(draw_date)
+            draw_day = date.fromisoformat(draw_date)
         except ValueError:
             return jsonify({"error": "Invalid draw date"}), 400
+        if not is_draw_day(lotto_type, draw_day):
+            return jsonify({
+                "error": f"No {LOTTO_LABELS[lotto_type]} drawing is scheduled for {draw_date}."
+            }), 400
         if not isinstance(numbers, list) or len(numbers) != 6:
             return jsonify({"error": "Exactly 6 winning numbers are required"}), 400
 
@@ -2041,6 +2070,9 @@ def initialize_runtime() -> None:
         if not db_exists:
             logger.info("Initialising database...")
         db.init_db()
+        removed_invalid_manual = _purge_invalid_manual_draws()
+        if removed_invalid_manual:
+            logger.info("Removed %d invalid manual draw override(s) during startup", removed_invalid_manual)
         if xlsx.exists() and (not db_exists or not is_render_runtime):
             summary = db.ingest_xlsx(str(xlsx))
             logger.info("Workbook sync complete: %s", summary)

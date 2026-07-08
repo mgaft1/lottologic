@@ -157,6 +157,32 @@ def mark_manual_draw(lotto_type: str, draw_date: str) -> None:
         )
 
 
+def get_manual_draw_overrides() -> list[dict]:
+    with _conn() as con:
+        rows = con.execute(
+            """
+            SELECT LottoType, DrawDate
+            FROM ManualDrawOverrides
+            ORDER BY LottoType, DrawDate
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def delete_draw(lotto_type: str, draw_date: str) -> bool:
+    """Delete one draw row and any matching manual-override marker."""
+    with _conn() as con:
+        con.execute(
+            "DELETE FROM ManualDrawOverrides WHERE LottoType=? AND DrawDate=?",
+            (lotto_type, draw_date),
+        )
+        cur = con.execute(
+            "DELETE FROM DrawHistory WHERE LottoType=? AND DrawDate=?",
+            (lotto_type, draw_date),
+        )
+    return cur.rowcount > 0
+
+
 def update_draw(lotto_type: str, draw_date: str,
                 n1: int, n2: int, n3: int, n4: int, n5: int,
                 n6) -> bool:

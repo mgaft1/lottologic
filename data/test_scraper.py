@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "files"))
 
-from scraper import parse_florida_official_pdf
+from scraper import _load_fl_published_draws, parse_florida_official_pdf
 
 
 def test_parse_florida_official_pdf_ignores_double_play(monkeypatch):
@@ -45,3 +45,17 @@ def test_parse_florida_official_pdf_ignores_double_play(monkeypatch):
             "n6": 40,
         },
     ]
+
+
+def test_load_fl_published_draws():
+    draws = _load_fl_published_draws(2026)
+
+    assert draws[-1] == {
+        "draw_date": "2026-07-22",
+        "n1": 3,
+        "n2": 14,
+        "n3": 22,
+        "n4": 32,
+        "n5": 35,
+        "n6": 40,
+    }

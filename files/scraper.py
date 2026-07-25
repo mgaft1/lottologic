@@ -36,6 +36,7 @@ import re
 import threading
 import time
 import json
+from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime
 from typing import Optional
@@ -735,7 +736,54 @@ def parse_florida_official_pdf(content: bytes, year: int) -> list[dict]:
     return sorted(draws.values(), key=lambda row: row["draw_date"])
 
 
+def _load_fl_published_draws(year: int) -> list[dict]:
+    """
+    Load Florida results published by the scheduled GitHub updater.
+
+    Render cannot negotiate TLS with the Florida Lottery file server, while
+    the Windows updater can. Keeping the downloaded results in the deployed
+    artifact gives Render a reliable, network-independent source.
+    """
+    snapshot_path = (
+        Path(__file__).resolve().parents[1] / "data" / "florida_lotto_results.json"
+    )
+    try:
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        logger.info("FL published snapshot is not present")
+        return []
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("FL published snapshot could not be read: %s", exc)
+        return []
+
+    rows = payload.get("draws", []) if isinstance(payload, dict) else []
+    draws: dict[str, dict] = {}
+    for row in rows:
+        try:
+            draw_date = datetime.strptime(str(row["draw_date"]), "%Y-%m-%d")
+            numbers = [int(row[f"n{i}"]) for i in range(1, 7)]
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (
+            draw_date.year != year
+            or len(set(numbers)) != 6
+            or numbers != sorted(numbers)
+            or any(number < 1 or number > 53 for number in numbers)
+        ):
+            continue
+        draws[draw_date.strftime("%Y-%m-%d")] = {
+            "draw_date": draw_date.strftime("%Y-%m-%d"),
+            **{f"n{i}": number for i, number in enumerate(numbers, start=1)},
+        }
+    return sorted(draws.values(), key=lambda row: row["draw_date"])
+
+
 def _fetch_fl_official_draws(year: int) -> list[dict]:
+    published = _load_fl_published_draws(year)
+    if published:
+        logger.info("FL published snapshot succeeded with %d draw(s)", len(published))
+        return published
+
     # The files.floridalottery.com CDN rejects TLS handshakes from some Render
     # runtimes. The Florida Lottery publishes the same report from its legacy
     # flalottery.com hosts, so prefer those and retain the CDN as a fallback.

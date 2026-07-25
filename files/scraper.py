@@ -79,6 +79,8 @@ INSECURE_SSL_FETCH_HOSTS = {
     "www.powerball.com",
     "www.coloradolottery.com",
     "www.lottonumbers.com",
+    "flalottery.com",
+    "www.flalottery.com",
     "files.floridalottery.com",
 }
 
@@ -734,13 +736,26 @@ def parse_florida_official_pdf(content: bytes, year: int) -> list[dict]:
 
 
 def _fetch_fl_official_draws(year: int) -> list[dict]:
-    content = _fetch_bytes("https://files.floridalottery.com/exptkt/l6.pdf")
-    draws = parse_florida_official_pdf(content, year) if content else []
-    if draws:
-        logger.info("FL official source succeeded with %d draw(s)", len(draws))
-    else:
-        logger.info("FL official source returned no draws")
-    return draws
+    # The files.floridalottery.com CDN rejects TLS handshakes from some Render
+    # runtimes. The Florida Lottery publishes the same report from its legacy
+    # flalottery.com hosts, so prefer those and retain the CDN as a fallback.
+    sources = [
+        "https://flalottery.com/exptkt/l6.pdf",
+        "https://www.flalottery.com/exptkt/l6.pdf",
+        "https://files.floridalottery.com/exptkt/l6.pdf",
+    ]
+    for url in sources:
+        content = _fetch_bytes(url)
+        draws = parse_florida_official_pdf(content, year) if content else []
+        if draws:
+            logger.info(
+                "FL official source %s succeeded with %d draw(s)",
+                urlparse(url).hostname,
+                len(draws),
+            )
+            return draws
+        logger.info("FL official source %s returned no draws", urlparse(url).hostname)
+    return []
 
 
 def _fetch_fl_draws(year: int) -> list[dict]:

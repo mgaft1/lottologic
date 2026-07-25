@@ -30,6 +30,7 @@ All inserts idempotent (INSERT OR IGNORE in db.insert_draw).
 """
 
 import logging
+import io
 import os
 import re
 import threading
@@ -43,6 +44,7 @@ import requests
 import urllib3
 from bs4 import BeautifulSoup
 from bs4.element import Tag
+from pypdf import PdfReader
 
 import db
 
@@ -77,6 +79,7 @@ INSECURE_SSL_FETCH_HOSTS = {
     "www.powerball.com",
     "www.coloradolottery.com",
     "www.lottonumbers.com",
+    "files.floridalottery.com",
 }
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -145,6 +148,37 @@ def _fetch(url: str) -> Optional[str]:
                 timeout_secs,
             )
     logger.warning("Fetch failed %s after retries: %s", url, last_error or last_encoding or "unknown error")
+    return None
+
+
+def _fetch_bytes(url: str) -> Optional[bytes]:
+    """Fetch a binary upstream asset using the same Render-safe retry policy."""
+    last_error = None
+    insecure_allowed = _allow_insecure_ssl(url)
+    attempt_plan = [
+        (True, REQUEST_TIMEOUT),
+        (False, max(REQUEST_TIMEOUT, 20)) if insecure_allowed else (True, REQUEST_TIMEOUT),
+    ]
+    for attempt, (verify_ssl, timeout_secs) in enumerate(attempt_plan, start=1):
+        try:
+            with requests.Session() as session:
+                session.trust_env = False
+                session.headers.update(BROWSER_HEADERS)
+                resp = session.get(url, timeout=timeout_secs, verify=verify_ssl)
+            resp.raise_for_status()
+            if resp.content:
+                return resp.content
+            last_error = "empty response"
+        except Exception as exc:
+            last_error = str(exc)
+            logger.warning(
+                "Binary fetch attempt %s/%s failed %s: %s",
+                attempt,
+                len(attempt_plan),
+                url,
+                exc,
+            )
+    logger.warning("Binary fetch failed %s: %s", url, last_error or "unknown error")
     return None
 
 
@@ -662,17 +696,66 @@ def parse_lottonumbers_fl(html: str) -> list[dict]:
     return results
 
 
+def parse_florida_official_pdf(content: bytes, year: int) -> list[dict]:
+    """
+    Parse base-game Florida Lotto rows from the official Winning Numbers
+    History PDF. The report also contains LOTTO DP rows, which are excluded.
+    """
+    try:
+        reader = PdfReader(io.BytesIO(content))
+    except Exception as exc:
+        logger.warning("FL official PDF could not be opened: %s", exc)
+        return []
+
+    row_pattern = re.compile(
+        r"(?P<date>\d{2}/\d{2}/\d{2})\s+"
+        r"(?P<n1>\d{1,2})\s*-\s*(?P<n2>\d{1,2})\s*-\s*"
+        r"(?P<n3>\d{1,2})\s*-\s*(?P<n4>\d{1,2})\s*-\s*"
+        r"(?P<n5>\d{1,2})\s*-\s*(?P<n6>\d{1,2})\s+LOTTO(?!\s+DP)"
+    )
+    draws: dict[str, dict] = {}
+    for page in reader.pages:
+        text = page.extract_text(extraction_mode="layout") or ""
+        for match in row_pattern.finditer(text):
+            draw_date = datetime.strptime(match.group("date"), "%m/%d/%y")
+            if draw_date.year != year:
+                continue
+            date_key = draw_date.strftime("%Y-%m-%d")
+            numbers = [int(match.group(f"n{i}")) for i in range(1, 7)]
+            draws[date_key] = {
+                "draw_date": date_key,
+                **{f"n{i}": number for i, number in enumerate(numbers, start=1)},
+            }
+        if draws:
+            # The report is newest-first; the current year's rows are on the
+            # first matching page, which keeps request-time refreshes quick.
+            break
+    return sorted(draws.values(), key=lambda row: row["draw_date"])
+
+
+def _fetch_fl_official_draws(year: int) -> list[dict]:
+    content = _fetch_bytes("https://files.floridalottery.com/exptkt/l6.pdf")
+    draws = parse_florida_official_pdf(content, year) if content else []
+    if draws:
+        logger.info("FL official source succeeded with %d draw(s)", len(draws))
+    else:
+        logger.info("FL official source returned no draws")
+    return draws
+
+
 def _fetch_fl_draws(year: int) -> list[dict]:
     """
     Florida Lotto can surface fresher results on the rolling "past-numbers"
     page before the yearly archive fully catches up. Merge both sources so the
     current year does not lag behind recent draws.
     """
+    merged: dict[str, dict] = {
+        draw["draw_date"]: draw for draw in _fetch_fl_official_draws(year)
+    }
     sources = [
         ("year", f"https://www.lottonumbers.com/florida-lotto/numbers/{year}"),
         ("recent", "https://www.lottonumbers.com/florida-lotto/past-numbers"),
     ]
-    merged: dict[str, dict] = {}
     for label, url in sources:
         html = _fetch(url)
         draws = parse_lottonumbers_fl(html) if html else []
@@ -692,6 +775,10 @@ def _fetch_fl_latest_draws(year: int) -> list[dict]:
     because it covers the last six months and can satisfy stale-repair needs
     without waiting on the heavier year archive when that host is slow.
     """
+    official = _fetch_fl_official_draws(year)
+    if official:
+        return official
+
     sources = [
         ("recent", "https://www.lottonumbers.com/florida-lotto/past-numbers"),
         ("year", f"https://www.lottonumbers.com/florida-lotto/numbers/{year}"),

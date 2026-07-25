@@ -29,7 +29,6 @@ def _conn():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH, timeout=SQLITE_TIMEOUT_SECS)
     con.row_factory = sqlite3.Row
-    con.execute(f"PRAGMA journal_mode={_journal_mode()}")
     con.execute(f"PRAGMA busy_timeout={int(SQLITE_TIMEOUT_SECS * 1000)}")
     con.execute("PRAGMA foreign_keys=ON")
     try:

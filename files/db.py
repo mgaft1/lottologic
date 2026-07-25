@@ -6,6 +6,7 @@ Window slicing is by calendar days, not draw count.
 
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -21,10 +22,38 @@ def _resolve_db_path() -> str:
 
 DB_PATH = _resolve_db_path()
 SQLITE_TIMEOUT_SECS = float(os.environ.get("LOTTO_SQLITE_TIMEOUT_SECS", "30"))
+_journal_config_lock = threading.Lock()
+_journal_configured = False
 
 def _journal_mode() -> str:
-    mode = os.environ.get("LOTTO_SQLITE_JOURNAL_MODE", "DELETE").upper()
+    mode = os.environ.get("LOTTO_SQLITE_JOURNAL_MODE", "WAL").upper()
     return mode if mode in {"DELETE", "WAL", "TRUNCATE", "PERSIST", "MEMORY", "OFF"} else "DELETE"
+
+
+def _configure_connection(con: sqlite3.Connection) -> None:
+    """
+    Configure process-wide journal behavior once, then apply inexpensive
+    per-connection settings.
+
+    Reissuing PRAGMA journal_mode on every connection can itself require an
+    exclusive lock. That caused Render viewer reads to block the background
+    stale-data writer.
+    """
+    global _journal_configured
+
+    con.execute(f"PRAGMA busy_timeout={int(SQLITE_TIMEOUT_SECS * 1000)}")
+    con.execute("PRAGMA foreign_keys=ON")
+    if _journal_configured:
+        return
+
+    with _journal_config_lock:
+        if _journal_configured:
+            return
+        desired_mode = _journal_mode()
+        current_mode = str(con.execute("PRAGMA journal_mode").fetchone()[0]).upper()
+        if current_mode != desired_mode:
+            con.execute(f"PRAGMA journal_mode={desired_mode}")
+        _journal_configured = True
 
 
 @contextmanager
@@ -32,10 +61,8 @@ def _conn():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH, timeout=SQLITE_TIMEOUT_SECS)
     con.row_factory = sqlite3.Row
-    con.execute(f"PRAGMA journal_mode={_journal_mode()}")
-    con.execute(f"PRAGMA busy_timeout={int(SQLITE_TIMEOUT_SECS * 1000)}")
-    con.execute("PRAGMA foreign_keys=ON")
     try:
+        _configure_connection(con)
         yield con
         con.commit()
     except Exception:
@@ -104,6 +131,10 @@ def insert_draw(lotto_type: str, draw_date: str,
     Idempotent on (LottoType, DrawDate). Returns True if inserted.
     """
     with _conn() as con:
+        # Reserve the single SQLite write slot before reading MAX(Id) and
+        # MAX(DrawIndex). Without this, concurrent refreshes can calculate the
+        # same values and either lock one another or violate the primary key.
+        con.execute("BEGIN IMMEDIATE")
         exists = con.execute(
             "SELECT 1 FROM DrawHistory WHERE LottoType=? AND DrawDate=?",
             (lotto_type, draw_date)

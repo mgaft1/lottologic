@@ -22,28 +22,14 @@ jobs:
   update:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
-      - name: Install PDF reader
-        run: python -m pip install pypdf
-
-      - name: Download official Florida Lottery history
-        shell: powershell
-        run: |
-          Invoke-WebRequest `
-            -Uri "https://files.floridalottery.com/exptkt/l6.pdf" `
-            -OutFile "$env:RUNNER_TEMP\florida-lotto.pdf"
-
-      - name: Publish current-year results
-        shell: powershell
-        run: |
-          python tools/update_florida_results.py `
-            "$env:RUNNER_TEMP\florida-lotto.pdf" `
-            "data/florida_lotto_results.json"
+      - name: Download, cross-check, and publish results
+        run: python tools/update_florida_results.py data/florida_lotto_results.json
 
       - name: Commit updated results
         shell: powershell

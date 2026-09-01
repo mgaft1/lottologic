@@ -120,7 +120,7 @@ def _resolve_lotto_payload(data: dict, default: str = "MM") -> str:
 TICKET_GAME_RULES = {
     "CA": {"main_count": 5, "main_max": 47, "bonus_max": 27, "base_price": 1.0},
     "FL": {"main_count": 6, "main_max": 53, "bonus_max": None, "base_price": 2.0},
-    "MM": {"main_count": 5, "main_max": 70, "bonus_max": 24, "base_price": 5.0},
+    "MM": {"main_count": 5, "main_max": 70, "bonus_max": 25, "base_price": 5.0},
     "PB": {"main_count": 5, "main_max": 69, "bonus_max": 26, "base_price": 2.0},
     "PD": {"main_count": 5, "main_max": 69, "bonus_max": 26, "base_price": 1.0},
 }

@@ -2081,6 +2081,17 @@ def initialize_runtime() -> None:
         else:
             logger.warning("Seed workbook not found at %s", xlsx)
 
+        # The scheduled GitHub workflow publishes a verified Florida snapshot
+        # into the deployed artifact. Import it while startup is still
+        # single-threaded, before viewer requests can compete for SQLite's
+        # write lock. Request-time stale repair remains a fallback.
+        if is_render_runtime:
+            try:
+                fl_summary = scraper.refresh_lotto_type("FL")
+                logger.info("Florida startup snapshot sync complete: %s", fl_summary)
+            except Exception as exc:
+                logger.warning("Florida startup snapshot sync failed: %s", exc)
+
         db_forecast.init_forecast_schema()
         # On Render, keep forecasts incrementally refreshed so newly scraped
         # draw dates appear without requiring a manual rebuild of the DB.

@@ -51,11 +51,11 @@ def test_load_fl_published_draws():
     draws = _load_fl_published_draws(2026)
 
     assert draws[-1] == {
-        "draw_date": "2026-07-22",
-        "n1": 3,
-        "n2": 14,
-        "n3": 22,
-        "n4": 32,
-        "n5": 35,
-        "n6": 40,
+        "draw_date": "2026-09-12",
+        "n1": 5,
+        "n2": 16,
+        "n3": 19,
+        "n4": 33,
+        "n5": 37,
+        "n6": 45,
     }

@@ -13,6 +13,7 @@ from pathlib import Path
 SOURCES = {
     "lottery-post": "https://www.lotterypost.com/results/fl",
     "lottery-valley": "https://www.lotteryvalley.com/florida/past-results",
+    "lotto-numbers": "https://florida.lottonumbers.com/lotto/past-numbers/2026",
 }
 
 HEADERS = {
@@ -123,9 +124,47 @@ def parse_lottery_valley(page: str, year: int) -> list[dict]:
     return sorted(draws.values(), key=lambda row: row["draw_date"])
 
 
+def parse_lotto_numbers(page: str, year: int) -> list[dict]:
+    """Parse the current-year Florida Lotto archive table."""
+    draws: dict[str, dict] = {}
+    for row_html in re.findall(
+        r"<tr\b[^>]*>(.*?)</tr>",
+        page,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        date_match = re.search(
+            r"<td\b[^>]*class=[\"'][^\"']*date-row[^\"']*[\"'][^>]*>"
+            r"(.*?)</td>",
+            row_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        balls_match = re.search(
+            r"<ul\b[^>]*class=[\"'][^\"']*balls[^\"']*[\"'][^>]*>"
+            r"(.*?)</ul>",
+            row_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not date_match or not balls_match:
+            continue
+        date_text = " ".join(_plain_text(date_match.group(1)).split())
+        numbers = [
+            int(value)
+            for value in re.findall(
+                r"<li\b[^>]*>\s*(\d{1,2})\s*</li>",
+                balls_match.group(1),
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+        ]
+        draw = _validated_draw(date_text, numbers, year)
+        if draw:
+            draws[draw["draw_date"]] = draw
+    return sorted(draws.values(), key=lambda row: row["draw_date"])
+
+
 PARSERS = {
     "lottery-post": parse_lottery_post,
     "lottery-valley": parse_lottery_valley,
+    "lotto-numbers": parse_lotto_numbers,
 }
 
 
@@ -210,6 +249,14 @@ def main() -> None:
     if not draws:
         print("WARNING: no trusted Florida Lotto results available; nothing written")
         return
+    snapshot_age = (datetime.now(timezone.utc).date() - datetime.strptime(
+        draws[-1]["draw_date"], "%Y-%m-%d"
+    ).date()).days
+    if snapshot_age > 8:
+        raise SystemExit(
+            f"Florida Lotto snapshot is stale: latest trusted draw is "
+            f"{draws[-1]['draw_date']} ({snapshot_age} days old)"
+        )
     if accepted == existing:
         print(f"Florida Lotto snapshot is already current through {draws[-1]['draw_date']}")
         return

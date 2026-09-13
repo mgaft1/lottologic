@@ -4,7 +4,11 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
-from update_florida_results import parse_lottery_post, parse_lottery_valley
+from update_florida_results import (
+    parse_lottery_post,
+    parse_lottery_valley,
+    parse_lotto_numbers,
+)
 
 
 def test_parse_lottery_post_uses_main_draw_not_double_play():
@@ -38,3 +42,21 @@ def test_parse_lottery_valley_reads_lotto_table_only():
     assert [draw["draw_date"] for draw in draws] == ["2026-07-22", "2026-07-25"]
     assert draws[-1]["n1"] == 7
     assert draws[-1]["n6"] == 52
+
+
+def test_parse_lotto_numbers_reads_current_year_archive():
+    page = """
+    <table><tbody><tr>
+      <td class="date-row">Sat, Sep 12 2026</td>
+      <td><ul class="balls">
+        <li class="ball">5</li><li class="ball">16</li>
+        <li class="ball">19</li><li class="ball">33</li>
+        <li class="ball">37</li><li class="ball">45</li>
+      </ul></td>
+    </tr></tbody></table>
+    """
+
+    assert parse_lotto_numbers(page, 2026) == [{
+        "draw_date": "2026-09-12",
+        "n1": 5, "n2": 16, "n3": 19, "n4": 33, "n5": 37, "n6": 45,
+    }]

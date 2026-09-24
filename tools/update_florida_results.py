@@ -13,7 +13,7 @@ from pathlib import Path
 SOURCES = {
     "lottery-post": "https://www.lotterypost.com/results/fl",
     "lottery-valley": "https://www.lotteryvalley.com/florida/past-results",
-    "lotto-numbers": "https://florida.lottonumbers.com/lotto/past-numbers/2026",
+    "lotto-numbers": "https://www.lottonumbers.com/florida-lotto/numbers/{year}",
 }
 
 HEADERS = {
@@ -223,7 +223,11 @@ def main() -> None:
     votes: dict[str, Counter[tuple[int, ...]]] = defaultdict(Counter)
     source_count = 0
 
-    for name, url in SOURCES.items():
+    source_urls = {
+        name: url.format(year=args.year)
+        for name, url in SOURCES.items()
+    }
+    for name, url in source_urls.items():
         draws = fetch_source(name, url, args.year)
         if not draws:
             continue
@@ -262,7 +266,7 @@ def main() -> None:
         return
 
     payload = {
-        "sources": list(SOURCES.values()),
+        "sources": list(source_urls.values()),
         "validation": "published only when two independent sources agree",
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "draws": draws,

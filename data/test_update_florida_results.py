@@ -47,16 +47,16 @@ def test_parse_lottery_valley_reads_lotto_table_only():
 def test_parse_lotto_numbers_reads_current_year_archive():
     page = """
     <table><tbody><tr>
-      <td class="date-row">Sat, Sep 12 2026</td>
-      <td><ul class="balls">
-        <li class="ball">5</li><li class="ball">16</li>
-        <li class="ball">19</li><li class="ball">33</li>
-        <li class="ball">37</li><li class="ball">45</li>
+      <td class="noBefore colour date-row">Wed, Sep 23 2026</td>
+      <td class="noBefore balls-row"><ul class="balls">
+        <li class="ball ball">6</li><li class="ball ball">13</li>
+        <li class="ball ball">22</li><li class="ball ball">40</li>
+        <li class="ball ball">43</li><li class="ball ball">47</li>
       </ul></td>
     </tr></tbody></table>
     """
 
     assert parse_lotto_numbers(page, 2026) == [{
-        "draw_date": "2026-09-12",
-        "n1": 5, "n2": 16, "n3": 19, "n4": 33, "n5": 37, "n6": 45,
+        "draw_date": "2026-09-23",
+        "n1": 6, "n2": 13, "n3": 22, "n4": 40, "n5": 43, "n6": 47,
     }]

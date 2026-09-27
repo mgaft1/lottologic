@@ -5,7 +5,7 @@
     "https://www.lottonumbers.com/florida-lotto/numbers/2026"
   ],
   "validation": "published only when two independent sources agree",
-  "updated_at": "2026-09-24T16:02:04+00:00",
+  "updated_at": "2026-09-27T12:16:43+00:00",
   "draws": [
     {
       "draw_date": "2026-07-01",
@@ -231,6 +231,15 @@
       "n4": 40,
       "n5": 43,
       "n6": 47
+    },
+    {
+      "draw_date": "2026-09-26",
+      "n1": 1,
+      "n2": 5,
+      "n3": 10,
+      "n4": 15,
+      "n5": 35,
+      "n6": 45
     }
   ]
 }

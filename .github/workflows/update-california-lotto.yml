@@ -1,0 +1,45 @@
+name: Update California Lotto results
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "45 6 * * *"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/update-california-lotto.yml"
+      - "tools/update_california_results.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-california-lotto
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Download, cross-check, and publish results
+        run: python tools/update_california_results.py data/california_lotto_results.json
+
+      - name: Commit updated results
+        shell: powershell
+        run: |
+          if (-not (git status --porcelain -- data/california_lotto_results.json)) {
+            Write-Host "California Lotto results are already current."
+            exit 0
+          }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/california_lotto_results.json
+          git commit -m "Update California Lotto results"
+          git push

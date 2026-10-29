@@ -389,6 +389,11 @@ def parse_calottery_ca_latest(html: str) -> list[dict]:
 
 
 def _fetch_ca_latest_draws() -> list[dict]:
+    published = _load_ca_published_draws(datetime.now().year)
+    if published:
+        logger.info("CA published snapshot succeeded with %d draw(s)", len(published))
+        return published
+
     html = _fetch('https://www.calottery.com/en/draw-games/superlotto-plus')
     draws = parse_calottery_ca_latest(html) if html else []
     if draws:
@@ -769,6 +774,45 @@ def _load_fl_published_draws(year: int) -> list[dict]:
             or len(set(numbers)) != 6
             or numbers != sorted(numbers)
             or any(number < 1 or number > 53 for number in numbers)
+        ):
+            continue
+        draws[draw_date.strftime("%Y-%m-%d")] = {
+            "draw_date": draw_date.strftime("%Y-%m-%d"),
+            **{f"n{i}": number for i, number in enumerate(numbers, start=1)},
+        }
+    return sorted(draws.values(), key=lambda row: row["draw_date"])
+
+
+def _load_ca_published_draws(year: int) -> list[dict]:
+    """Load California results cross-checked by the scheduled GitHub updater."""
+    snapshot_path = (
+        Path(__file__).resolve().parents[1] / "data" / "california_lotto_results.json"
+    )
+    try:
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        logger.info("CA published snapshot is not present")
+        return []
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("CA published snapshot could not be read: %s", exc)
+        return []
+
+    rows = payload.get("draws", []) if isinstance(payload, dict) else []
+    draws: dict[str, dict] = {}
+    for row in rows:
+        try:
+            draw_date = datetime.strptime(str(row["draw_date"]), "%Y-%m-%d")
+            numbers = [int(row[f"n{i}"]) for i in range(1, 7)]
+        except (KeyError, TypeError, ValueError):
+            continue
+        main = numbers[:5]
+        if (
+            draw_date.year != year
+            or main != sorted(main)
+            or len(set(main)) != 5
+            or any(number < 1 or number > 47 for number in main)
+            or numbers[5] < 1
+            or numbers[5] > 27
         ):
             continue
         draws[draw_date.strftime("%Y-%m-%d")] = {

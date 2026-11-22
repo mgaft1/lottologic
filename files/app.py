@@ -450,6 +450,13 @@ def _parse_purchased_flag(value) -> bool:
     return True
 
 
+def _parse_ticket_status(data: dict, default: str = "OPTIONAL") -> str:
+    value = data.get("status")
+    if value is None and "purchased" in data:
+        value = "PURCHASED" if _parse_purchased_flag(data.get("purchased")) else "OPTIONAL"
+    return db_ticket_sim.normalize_status(value or default)
+
+
 def normalize_ticket_numbers(lotto_type: str, numbers: list[int]) -> list[int]:
     rules = TICKET_GAME_RULES[lotto_type]
     if lotto_type == "FL":
@@ -1207,6 +1214,24 @@ def tickets_page():
     return response
 
 
+@app.route("/saved-tickets")
+@login_required
+def saved_tickets_page():
+    trigger_ticket_cleanup_async()
+    response = make_response(render_template(
+        "saved_tickets.html",
+        lotto_types=list(LOTTO_LABELS.keys()),
+        lotto_labels=LOTTO_LABELS,
+        ticket_statuses=list(db_ticket_sim.TICKET_STATUSES),
+        game_rules=TICKET_GAME_RULES,
+        app_build=APP_BUILD,
+    ))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 @app.route("/api/build")
 def api_build():
     return jsonify({"build": APP_BUILD})
@@ -1263,7 +1288,7 @@ def api_tickets_get():
         result = compare_ticket_to_draw(lotto_type, ticket, actual_draw)
         ticket["comparison"] = result
         compared.append(ticket)
-        if not ticket.get("Purchased"):
+        if ticket.get("Status") != "PURCHASED":
             continue
         if result["win_amount"] is not None:
             total_won += float(result["win_amount"])
@@ -1288,7 +1313,10 @@ def api_tickets_add():
     draw_date = (data.get("draw_date") or "").strip()
     numbers = data.get("numbers") or []
     price = float(data.get("price") or 0)
-    purchased = _parse_purchased_flag(data.get("purchased", True))
+    try:
+        status = _parse_ticket_status(data)
+    except ValueError:
+        return jsonify({"error": "Status must be Optional, Planned, or Purchased."}), 400
 
     if lotto_type not in LOTTO_LABELS:
         return jsonify({"error": "Invalid lotto type"}), 400
@@ -1309,7 +1337,7 @@ def api_tickets_add():
     if not ok:
         return jsonify({"error": msg}), 400
 
-    ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, parsed, purchased=purchased)
+    ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, parsed, status=status)
     if ticket_id is None:
         return jsonify({"error": "This exact ticket is already saved for that lotto and draw date."}), 409
     return jsonify({"id": ticket_id}), 201
@@ -1325,7 +1353,10 @@ def api_tickets_permutations():
         draw_date = (data.get("draw_date") or "").strip()
         buckets = data.get("buckets") or []
         price = float(data.get("price") or 0)
-        purchased = _parse_purchased_flag(data.get("purchased", True))
+        try:
+            status = _parse_ticket_status(data)
+        except ValueError:
+            return jsonify({"error": "Status must be Optional, Planned, or Purchased."}), 400
 
         if lotto_type not in LOTTO_LABELS:
             return jsonify({"error": "Invalid lotto type"}), 400
@@ -1372,7 +1403,7 @@ def api_tickets_permutations():
                 duplicates += 1
                 continue
             seen_batch.add(key)
-            ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, ticket, purchased=purchased)
+            ticket_id = db_ticket_sim.add_ticket(lotto_type, draw_date, price, ticket, status=status)
             if ticket_id is None:
                 duplicates += 1
                 continue
@@ -1502,11 +1533,41 @@ def api_tickets_delete_optional():
 @login_required
 def api_tickets_update_status(ticket_id):
     data = request.get_json(silent=True) or {}
-    purchased = _parse_purchased_flag(data.get("purchased", False))
-    updated = db_ticket_sim.update_ticket_status(ticket_id, purchased)
+    try:
+        status = _parse_ticket_status(data)
+    except ValueError:
+        return jsonify({"error": "Status must be Optional, Planned, or Purchased."}), 400
+    updated = db_ticket_sim.update_ticket_status(ticket_id, status)
     if not updated:
         return jsonify({"error": "Ticket not found"}), 404
-    return jsonify({"id": ticket_id, "purchased": purchased})
+    return jsonify({"id": ticket_id, "status": status, "purchased": status == "PURCHASED"})
+
+
+@app.route("/api/saved_tickets")
+@login_required
+def api_saved_tickets():
+    trigger_ticket_cleanup_async()
+    lotto_type = (request.args.get("lotto") or "").strip().upper() or None
+    status = (request.args.get("status") or "").strip().upper() or None
+    draw_date = (request.args.get("draw_date") or "").strip() or None
+    if lotto_type and lotto_type not in LOTTO_LABELS:
+        return jsonify({"error": "Invalid lotto type"}), 400
+    if status and status not in db_ticket_sim.TICKET_STATUSES:
+        return jsonify({"error": "Invalid ticket status"}), 400
+    if draw_date:
+        try:
+            date.fromisoformat(draw_date)
+        except ValueError:
+            return jsonify({"error": "Invalid draw date"}), 400
+
+    rows = db_ticket_sim.get_saved_tickets(lotto_type, status, draw_date)
+    draw_cache: dict[tuple[str, str], dict | None] = {}
+    for row in rows:
+        key = (row["LottoType"], row["DrawDate"])
+        if key not in draw_cache:
+            draw_cache[key] = db.get_draw_by_date(*key)
+        row["comparison"] = compare_ticket_to_draw(row["LottoType"], row, draw_cache[key])
+    return jsonify({"tickets": rows})
 
 
 # ---------------------------------------------------------------------------

@@ -352,6 +352,12 @@ td {
 .ticket-status.optional {
   color: #7a8794;
 }
+.ticket-status.planned { color: #b06a00; }
+.ticket-status.purchased { color: #087a36; }
+.ticket-status-select {
+  min-width: 118px;
+  font-weight: 700;
+}
 .win-value {
   color: #0b8a2b;
   font-size: 1.12rem;
@@ -503,6 +509,7 @@ td {
   <a href="/">Lotto Viewer</a>
   <a href="/gaps">Time Gaps</a>
   <a href="/links">Links</a>
+  <a href="/saved-tickets">Saved Tickets</a>
   <a href="/logout" class="nav-logout">Sign out</a>
 </div>
 
@@ -522,7 +529,7 @@ td {
         <input type="date" id="draw-date" value="{{ draw_date }}">
       </div>
       <button class="btn" id="btn-load">Load</button>
-      <div class="helper">Temporary ticket storage is kept for 7 days after the draw date, then deleted automatically.</div>
+      <div class="helper">Optional tickets are kept for 14 days after the draw date. Planned and Purchased tickets are retained until you delete them.</div>
     </div>
   </div>
 
@@ -621,8 +628,9 @@ td {
         <div class="field">
           <label>Status</label>
           <div class="status-group">
-            <label class="status-choice"><input type="radio" name="perm-status" value="purchased">Purchased</label>
             <label class="status-choice"><input type="radio" name="perm-status" value="optional" checked>Optional</label>
+            <label class="status-choice"><input type="radio" name="perm-status" value="planned">Planned</label>
+            <label class="status-choice"><input type="radio" name="perm-status" value="purchased">Purchased</label>
           </div>
         </div>
         <div class="field"><label>Price</label><input class="price-input" type="number" id="perm-price" min="0" step="0.01"></div>
@@ -679,7 +687,6 @@ td {
         <tr>
           <th>#</th>
           <th>Numbers</th>
-          <th>Purchased</th>
           <th>Status</th>
           <th>Price</th>
           <th>Result</th>
@@ -1026,22 +1033,27 @@ function renderTickets(data) {
   const purchasedTickets = [];
   const optionalTickets = [];
   for (const row of data.tickets) {
+    const ticketStatus = String(row.Status || (row.Purchased ? "PURCHASED" : "OPTIONAL")).toUpperCase();
+    const statusClass = ticketStatus.toLowerCase();
     const cmp = row.comparison || {};
     const tr = document.createElement("tr");
     if (compareMode && cmp.is_winner) tr.className = "winner-row";
     tr.innerHTML = `
       <td>${row.Id}</td>
       <td><div class="ticket-numbers">${ticketBallsHtml(row)}</div></td>
-      <td class="status-toggle-cell"><input class="status-toggle" type="checkbox" data-status="${row.Id}" ${row.Purchased ? "checked" : ""} title="Checked = Purchased, unchecked = Optional"></td>
-      <td><span class="ticket-status ${row.Purchased ? "purchased" : "optional"}">${row.Purchased ? "Purchased" : "Optional"}</span></td>
+      <td><select class="ticket-status-select ticket-status ${statusClass}" data-status="${row.Id}">
+        <option value="OPTIONAL" ${ticketStatus === "OPTIONAL" ? "selected" : ""}>Optional</option>
+        <option value="PLANNED" ${ticketStatus === "PLANNED" ? "selected" : ""}>Planned</option>
+        <option value="PURCHASED" ${ticketStatus === "PURCHASED" ? "selected" : ""}>Purchased</option>
+      </select></td>
       <td>${formatMoney(row.TicketPrice)}</td>
       <td>${compareMode ? (cmp.match_label || "-") : "-"}</td>
       <td>${compareMode ? (cmp.win_amount != null ? `<span class="win-value">${formatMoney(cmp.win_amount)}</span>` : (cmp.is_winner ? `<span class="win-value">TBD</span>` : "-")) : "-"}</td>
       <td><button class="btn btn-secondary" data-delete="${row.Id}">Delete</button></td>
     `;
     body.appendChild(tr);
-    if (row.Purchased) purchasedTickets.push(row);
-    else optionalTickets.push(row);
+    if (ticketStatus === "PURCHASED") purchasedTickets.push(row);
+    if (ticketStatus === "OPTIONAL") optionalTickets.push(row);
     if (compareMode && cmp.is_winner) winners.push(row);
   }
   document.getElementById("btn-delete-optional").classList.toggle("hidden", optionalTickets.length === 0);
@@ -1064,12 +1076,14 @@ function renderTickets(data) {
 
   winnersPanel.classList.toggle("hidden", !compareMode || winners.length === 0);
   for (const row of winners) {
+    const ticketStatus = String(row.Status || (row.Purchased ? "PURCHASED" : "OPTIONAL")).toUpperCase();
+    const statusClass = ticketStatus.toLowerCase();
     const cmp = row.comparison || {};
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${row.Id}</td>
       <td><div class="ticket-numbers">${ticketBallsHtml(row)}</div></td>
-      <td><span class="ticket-status ${row.Purchased ? "purchased" : "optional"}">${row.Purchased ? "Purchased" : "Optional"}</span></td>
+      <td><span class="ticket-status ${statusClass}">${ticketStatus[0] + ticketStatus.slice(1).toLowerCase()}</span></td>
       <td>${cmp.match_label || "-"}</td>
       <td>${cmp.win_amount != null ? `<span class="win-value">${formatMoney(cmp.win_amount)}</span>` : `<span class="win-value">TBD</span>`}</td>
       <td class="match-note">${cmp.win_note || ""}</td>
@@ -1093,13 +1107,14 @@ function renderTickets(data) {
     });
   });
 
-  document.querySelectorAll("[data-status]").forEach(box => {
-    box.addEventListener("change", async () => {
-      await fetch(`/api/tickets/${box.dataset.status}/status`, {
+  document.querySelectorAll("[data-status]").forEach(select => {
+    select.addEventListener("change", async () => {
+      const response = await fetch(`/api/tickets/${select.dataset.status}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ purchased: box.checked }),
+        body: JSON.stringify({ status: select.value }),
       });
+      if (!response.ok) alert("Could not update the ticket status. Please try again.");
       await loadTickets();
     });
   });
@@ -1107,7 +1122,7 @@ function renderTickets(data) {
 
 async function deleteOptionalTickets() {
   const btn = document.getElementById("btn-delete-optional");
-  if (!confirm("Delete all optional saved tickets for this lotto and draw date? Purchased tickets will remain.")) return;
+  if (!confirm("Delete all optional saved tickets for this lotto and draw date? Planned and Purchased tickets will remain.")) return;
   btn.disabled = true;
   let resp = await fetch("/api/tickets/optional", {
     method: "POST",
@@ -1170,7 +1185,7 @@ async function savePermutations() {
         draw_date: currentDate(),
         buckets,
         price: Number(document.getElementById("perm-price").value || 0),
-        purchased: currentStatus("perm-status") === "purchased",
+        status: currentStatus("perm-status"),
       })
     });
     const responseText = await r.text();

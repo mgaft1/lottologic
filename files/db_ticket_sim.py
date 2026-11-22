@@ -18,6 +18,14 @@ def _resolve_db_path() -> str:
 
 DB_PATH = _resolve_db_path()
 SQLITE_TIMEOUT_SECS = float(os.environ.get("LOTTO_SQLITE_TIMEOUT_SECS", "30"))
+TICKET_STATUSES = ("OPTIONAL", "PLANNED", "PURCHASED")
+
+
+def normalize_status(status: str | None) -> str:
+    value = str(status or "OPTIONAL").strip().upper()
+    if value not in TICKET_STATUSES:
+        raise ValueError(f"Invalid ticket status: {status}")
+    return value
 
 def _journal_mode() -> str:
     mode = os.environ.get("LOTTO_SQLITE_JOURNAL_MODE", "DELETE").upper()
@@ -49,7 +57,8 @@ def init_ticket_schema() -> None:
                 Id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 LottoType   CHAR(2)      NOT NULL,
                 DrawDate    DATE         NOT NULL,
-                Purchased   INTEGER      NOT NULL DEFAULT 1,
+                Purchased   INTEGER      NOT NULL DEFAULT 0,
+                Status      TEXT         NOT NULL DEFAULT 'OPTIONAL',
                 TicketPrice REAL         NOT NULL DEFAULT 0,
                 Nbr1        INTEGER      NOT NULL,
                 Nbr2        INTEGER      NOT NULL,
@@ -66,7 +75,34 @@ def init_ticket_schema() -> None:
         )
         cols = {row["name"] for row in con.execute("PRAGMA table_info(TicketSimSelections)").fetchall()}
         if "Purchased" not in cols:
-            con.execute("ALTER TABLE TicketSimSelections ADD COLUMN Purchased INTEGER NOT NULL DEFAULT 1")
+            con.execute("ALTER TABLE TicketSimSelections ADD COLUMN Purchased INTEGER NOT NULL DEFAULT 0")
+        if "Status" not in cols:
+            con.execute("ALTER TABLE TicketSimSelections ADD COLUMN Status TEXT NOT NULL DEFAULT 'OPTIONAL'")
+            con.execute(
+                """
+                UPDATE TicketSimSelections
+                SET Status = CASE WHEN Purchased = 1 THEN 'PURCHASED' ELSE 'OPTIONAL' END
+                """
+            )
+        con.execute(
+            """
+            UPDATE TicketSimSelections
+            SET Status = CASE WHEN Purchased = 1 THEN 'PURCHASED' ELSE 'OPTIONAL' END
+            WHERE Status IS NULL OR UPPER(Status) NOT IN ('OPTIONAL', 'PLANNED', 'PURCHASED')
+            """
+        )
+        con.execute(
+            """
+            UPDATE TicketSimSelections
+            SET Purchased = CASE WHEN UPPER(Status) = 'PURCHASED' THEN 1 ELSE 0 END
+            """
+        )
+        con.execute(
+            """
+            CREATE INDEX IF NOT EXISTS IX_TicketSimSelections_Status_Date
+            ON TicketSimSelections (Status, DrawDate)
+            """
+        )
 
 
 def purge_expired_tickets() -> int:
@@ -75,7 +111,8 @@ def purge_expired_tickets() -> int:
             cur = con.execute(
                 """
                 DELETE FROM TicketSimSelections
-                WHERE DATE(DrawDate, '+7 day') < DATE('now')
+                WHERE UPPER(Status) = 'OPTIONAL'
+                  AND DATE(DrawDate, '+14 day') < DATE('now')
                 """
             )
             return int(cur.rowcount or 0)
@@ -115,7 +152,14 @@ def ticket_exists(lotto_type: str, draw_date: str, numbers: list[int]) -> bool:
     return row is not None
 
 
-def add_ticket(lotto_type: str, draw_date: str, price: float, numbers: list[int], purchased: bool = True) -> int | None:
+def add_ticket(
+    lotto_type: str,
+    draw_date: str,
+    price: float,
+    numbers: list[int],
+    status: str = "OPTIONAL",
+) -> int | None:
+    status = normalize_status(status)
     for attempt in range(5):
         try:
             if ticket_exists(lotto_type, draw_date, numbers):
@@ -124,13 +168,14 @@ def add_ticket(lotto_type: str, draw_date: str, price: float, numbers: list[int]
                 cur = con.execute(
                     """
                     INSERT INTO TicketSimSelections
-                    (LottoType, DrawDate, Purchased, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (LottoType, DrawDate, Purchased, Status, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         lotto_type,
                         draw_date,
-                        1 if purchased else 0,
+                        1 if status == "PURCHASED" else 0,
+                        status,
                         price,
                         numbers[0],
                         numbers[1],
@@ -168,7 +213,7 @@ def delete_optional_tickets(lotto_type: str, draw_date: str) -> int:
                 cur = con.execute(
                     """
                     DELETE FROM TicketSimSelections
-                    WHERE LottoType = ? AND DrawDate = ? AND Purchased = 0
+                    WHERE LottoType = ? AND DrawDate = ? AND UPPER(Status) = 'OPTIONAL'
                     """,
                     (lotto_type, draw_date),
                 )
@@ -180,13 +225,14 @@ def delete_optional_tickets(lotto_type: str, draw_date: str) -> int:
     return 0
 
 
-def update_ticket_status(ticket_id: int, purchased: bool) -> bool:
+def update_ticket_status(ticket_id: int, status: str) -> bool:
+    status = normalize_status(status)
     for attempt in range(5):
         try:
             with _conn() as con:
                 cur = con.execute(
-                    "UPDATE TicketSimSelections SET Purchased = ? WHERE Id = ?",
-                    (1 if purchased else 0, ticket_id),
+                    "UPDATE TicketSimSelections SET Status = ?, Purchased = ? WHERE Id = ?",
+                    (status, 1 if status == "PURCHASED" else 0, ticket_id),
                 )
                 return int(cur.rowcount or 0) > 0
         except sqlite3.OperationalError as exc:
@@ -200,7 +246,7 @@ def get_tickets(lotto_type: str, draw_date: str) -> list[dict]:
     with _conn() as con:
         rows = con.execute(
             """
-            SELECT Id, LottoType, DrawDate, Purchased, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6, CreatedAt
+            SELECT Id, LottoType, DrawDate, Purchased, Status, TicketPrice, Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6, CreatedAt
             FROM TicketSimSelections
             WHERE LottoType = ? AND DrawDate = ?
             ORDER BY Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, COALESCE(Nbr6, -1), Id
@@ -210,13 +256,44 @@ def get_tickets(lotto_type: str, draw_date: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_saved_tickets(
+    lotto_type: str | None = None,
+    status: str | None = None,
+    draw_date: str | None = None,
+) -> list[dict]:
+    clauses = []
+    params: list[object] = []
+    if lotto_type:
+        clauses.append("LottoType = ?")
+        params.append(lotto_type)
+    if status:
+        clauses.append("UPPER(Status) = ?")
+        params.append(normalize_status(status))
+    if draw_date:
+        clauses.append("DrawDate = ?")
+        params.append(draw_date)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with _conn() as con:
+        rows = con.execute(
+            f"""
+            SELECT Id, LottoType, DrawDate, Purchased, Status, TicketPrice,
+                   Nbr1, Nbr2, Nbr3, Nbr4, Nbr5, Nbr6, CreatedAt
+            FROM TicketSimSelections
+            {where}
+            ORDER BY DrawDate DESC, LottoType, Id DESC
+            """,
+            params,
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_total_spent(lotto_type: str, draw_date: str) -> float:
     with _conn() as con:
         row = con.execute(
             """
             SELECT COALESCE(SUM(TicketPrice), 0) AS total_spent
             FROM TicketSimSelections
-            WHERE LottoType = ? AND DrawDate = ? AND Purchased = 1
+            WHERE LottoType = ? AND DrawDate = ? AND UPPER(Status) = 'PURCHASED'
             """,
             (lotto_type, draw_date),
         ).fetchone()

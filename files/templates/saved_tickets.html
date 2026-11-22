@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="app-build" content="{{ app_build }}">
+<title>Saved Tickets</title>
+<style>
+* { box-sizing: border-box; }
+body { margin:0; font-family:Arial,sans-serif; color:#30343b; background:#fff; }
+#navbar { background:#f5f6f8; border-bottom:1px solid #d3d7de; padding:8px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+#navbar a { color:#fff; text-decoration:none; font-size:1.05rem; font-weight:700; padding:7px 12px; background:#4488ff; border:1px solid #2266dd; border-radius:4px; }
+#navbar .nav-logout { margin-left:auto; color:#bf4d5d; background:transparent; border:0; font-size:.95rem; }
+#main { max-width:1450px; margin:0 auto; padding:18px 20px 32px; display:flex; flex-direction:column; gap:18px; }
+.panel { background:#fafbfc; border:1px solid #d9dde3; border-radius:8px; padding:16px; }
+h1 { margin:0 0 6px; font-size:1.7rem; }
+.helper { font-weight:600; line-height:1.4; }
+.controls { display:flex; gap:12px; align-items:end; flex-wrap:wrap; }
+.field { display:flex; flex-direction:column; gap:5px; }
+label { font-weight:700; }
+select,input { min-height:38px; padding:6px 9px; border:1px solid #aeb5bf; border-radius:4px; background:#fff; font-size:1rem; }
+.btn { min-height:38px; padding:7px 14px; border:1px solid #2266dd; border-radius:4px; background:#4488ff; color:#fff; font-weight:700; cursor:pointer; }
+.btn-secondary { color:#30343b; background:#fff; border-color:#aeb5bf; }
+.btn-danger { color:#a32638; background:#fff; border-color:#d8a5ad; }
+.number-grid { display:grid; grid-template-columns:repeat(6,82px); gap:8px; }
+.add-grid { display:flex; gap:12px; align-items:end; flex-wrap:wrap; }
+.message { margin-top:10px; font-weight:700; }
+.error { color:#b3263e; }
+table { width:100%; border-collapse:collapse; }
+th,td { padding:10px 8px; border-bottom:1px solid #d9dde3; text-align:left; vertical-align:middle; }
+th { text-transform:uppercase; font-size:.85rem; letter-spacing:.03em; color:#39424e; }
+.ticket-numbers { display:flex; gap:5px; white-space:nowrap; }
+.ball { width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:700; }
+.status-select { min-width:118px; font-weight:700; }
+.status-select.optional { color:#687785; }
+.status-select.planned { color:#a76000; }
+.status-select.purchased { color:#087a36; }
+.empty { padding:22px; text-align:center; font-weight:700; color:#687785; }
+@media(max-width:900px){ .table-wrap{overflow-x:auto;} .number-grid{grid-template-columns:repeat(3,82px);} }
+</style>
+</head>
+<body>
+<div id="navbar">
+  <a href="/home">Home</a>
+  <a href="/tickets">Predictions</a>
+  <a href="/">Lotto Viewer</a>
+  <a href="/gaps">Time Gaps</a>
+  <a href="/logout" class="nav-logout">Sign out</a>
+</div>
+<div id="main">
+  <div class="panel">
+    <h1>Saved Tickets</h1>
+    <div class="helper">Optional tickets expire 14 days after their draw date. Planned and Purchased tickets remain here until explicitly deleted.</div>
+  </div>
+
+  <div class="panel">
+    <div class="controls">
+      <div class="field"><label for="filter-lotto">Lottery</label><select id="filter-lotto"><option value="">All</option>{% for lt in lotto_types %}<option value="{{ lt }}">{{ lotto_labels.get(lt, lt) }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="filter-status">Status</label><select id="filter-status"><option value="">All</option>{% for status in ticket_statuses %}<option value="{{ status }}">{{ status.title() }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="filter-date">Draw Date</label><input type="date" id="filter-date"></div>
+      <button class="btn" id="btn-filter">Apply Filters</button>
+      <button class="btn btn-secondary" id="btn-clear">Clear</button>
+      <div class="helper" id="record-count"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h1 style="font-size:1.25rem">Add an Actual Purchase</h1>
+    <div class="helper" style="margin-bottom:12px">Use this when the ticket bought at the store was not among the proposed tickets. It will be saved directly as Purchased.</div>
+    <div class="add-grid">
+      <div class="field"><label for="add-lotto">Lottery</label><select id="add-lotto">{% for lt in lotto_types %}<option value="{{ lt }}">{{ lotto_labels.get(lt, lt) }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="add-date">Draw Date</label><input type="date" id="add-date"></div>
+      <div class="number-grid">{% for i in range(1,7) %}<div class="field"><label for="add-n{{ i }}">#{{ i }}</label><input type="number" id="add-n{{ i }}"></div>{% endfor %}</div>
+      <div class="field"><label for="add-price">Price</label><input type="number" min="0" step="0.01" id="add-price" value="0"></div>
+      <button class="btn" id="btn-add">Add Purchased Ticket</button>
+    </div>
+    <div class="message" id="add-message"></div>
+  </div>
+
+  <div class="panel table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Lottery</th><th>Draw Date</th><th>Numbers</th><th>Status</th><th>Price</th><th>Result</th><th>Win</th><th>Created</th><th></th></tr></thead>
+      <tbody id="saved-body"></tbody>
+    </table>
+    <div class="empty" id="empty-message" hidden>No tickets match these filters.</div>
+  </div>
+</div>
+<script>
+const SET_COLORS=["#8a2be2","#ff4500","#000080","#006400","#4b0082","#a52a2a"];
+const STATUS_VALUES=["OPTIONAL","PLANNED","PURCHASED"];
+const body=document.getElementById("saved-body");
+const empty=document.getElementById("empty-message");
+
+function esc(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function money(value){return `$${Number(value||0).toFixed(2)}`;}
+function usDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value||""))return value||"";const [y,m,d]=value.split("-");return `${m}/${d}/${y}`;}
+function balls(row){return [1,2,3,4,5,6].map((i,index)=>row[`Nbr${i}`]==null?"":`<span class="ball" style="background:${SET_COLORS[index]}">${esc(row[`Nbr${i}`])}</span>`).join("");}
+function statusOptions(status){return STATUS_VALUES.map(value=>`<option value="${value}" ${value===status?"selected":""}>${value[0]+value.slice(1).toLowerCase()}</option>`).join("");}
+
+async function loadSaved(){
+  const query=new URLSearchParams();
+  const lotto=document.getElementById("filter-lotto").value;
+  const status=document.getElementById("filter-status").value;
+  const date=document.getElementById("filter-date").value;
+  if(lotto)query.set("lotto",lotto); if(status)query.set("status",status); if(date)query.set("draw_date",date);
+  const response=await fetch(`/api/saved_tickets?${query}`);
+  const data=await response.json();
+  if(!response.ok){alert(data.error||"Could not load saved tickets.");return;}
+  body.innerHTML="";
+  document.getElementById("record-count").textContent=`${data.tickets.length} ticket${data.tickets.length===1?"":"s"}`;
+  empty.hidden=data.tickets.length!==0;
+  for(const row of data.tickets){
+    const status=String(row.Status||"OPTIONAL").toUpperCase();
+    const cmp=row.comparison||{};
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${row.Id}</td><td>${esc(row.LottoType)}</td><td>${usDate(row.DrawDate)}</td><td><div class="ticket-numbers">${balls(row)}</div></td>
+      <td><select class="status-select ${status.toLowerCase()}" data-status="${row.Id}">${statusOptions(status)}</select></td>
+      <td>${money(row.TicketPrice)}</td><td>${esc(cmp.match_label||"-")}</td><td>${cmp.win_amount==null?"-":money(cmp.win_amount)}</td>
+      <td>${esc(String(row.CreatedAt||"").replace("T"," ").slice(0,19))}</td><td><button class="btn btn-danger" data-delete="${row.Id}">Delete</button></td>`;
+    body.appendChild(tr);
+  }
+  document.querySelectorAll("[data-status]").forEach(select=>select.addEventListener("change",async()=>{
+    const response=await fetch(`/api/tickets/${select.dataset.status}/status`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:select.value})});
+    if(!response.ok)alert("Could not update the status."); await loadSaved();
+  }));
+  document.querySelectorAll("[data-delete]").forEach(button=>button.addEventListener("click",async()=>{
+    if(!confirm("Delete this saved ticket permanently?"))return;
+    const response=await fetch(`/api/tickets/${button.dataset.delete}`,{method:"DELETE"});
+    if(!response.ok)alert("Could not delete the ticket."); await loadSaved();
+  }));
+}
+
+async function addPurchased(){
+  const message=document.getElementById("add-message"); message.className="message"; message.textContent="";
+  const numbers=[1,2,3,4,5,6].map(i=>Number(document.getElementById(`add-n${i}`).value));
+  const response=await fetch("/api/tickets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+    lotto:document.getElementById("add-lotto").value,draw_date:document.getElementById("add-date").value,numbers,
+    price:Number(document.getElementById("add-price").value||0),status:"PURCHASED"
+  })});
+  const data=await response.json();
+  if(!response.ok){message.classList.add("error");message.textContent=data.error||"Could not add the ticket.";return;}
+  message.textContent=`Purchased ticket #${data.id} added.`;
+  [1,2,3,4,5,6].forEach(i=>document.getElementById(`add-n${i}`).value="");
+  await loadSaved();
+}
+
+document.getElementById("btn-filter").addEventListener("click",loadSaved);
+document.getElementById("btn-clear").addEventListener("click",()=>{document.getElementById("filter-lotto").value="";document.getElementById("filter-status").value="";document.getElementById("filter-date").value="";loadSaved();});
+document.getElementById("btn-add").addEventListener("click",addPurchased);
+document.getElementById("add-date").value=new Date().toISOString().slice(0,10);
+loadSaved();
+</script>
+</body>
+</html>

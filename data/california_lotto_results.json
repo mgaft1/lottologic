@@ -4,7 +4,7 @@
     "https://california.lottonumbers.com/superlotto-plus/past-numbers/2026"
   ],
   "validation": "published only when two independent sources agree",
-  "updated_at": "2026-11-20T15:44:29+00:00",
+  "updated_at": "2026-11-23T18:43:30+00:00",
   "draws": [
     {
       "draw_date": "2026-01-03",
@@ -833,6 +833,15 @@
       "n4": 29,
       "n5": 37,
       "n6": 16
+    },
+    {
+      "draw_date": "2026-11-21",
+      "n1": 14,
+      "n2": 17,
+      "n3": 38,
+      "n4": 40,
+      "n5": 42,
+      "n6": 4
     }
   ]
 }
